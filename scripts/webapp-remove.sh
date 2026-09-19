@@ -9,7 +9,7 @@ usage() {
 }
 
 is_webapp_desktop() {
-    grep -q -E '^Exec=.*(launch-webapp|webapp-handler|webapp-launch|jhqs-webapp|--app=)' "$1" 2>/dev/null
+    grep -q -E '^Exec=.*(launch-webapp|webapp-handler|webapp-launch|solstice-webapp|--app=)' "$1" 2>/dev/null
 }
 
 FORCE=0

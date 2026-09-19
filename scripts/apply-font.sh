@@ -23,7 +23,7 @@ IS_MONO=0
 case "$FAM" in
   *[Mm][Oo][Nn][Oo]*) IS_MONO=1 ;;
 esac
-MONO_STATE="${XDG_CACHE_HOME:-$HOME/.cache}/jhqs/last-mono-font"
+MONO_STATE="${XDG_CACHE_HOME:-$HOME/.cache}/solstice/last-mono-font"
 if [ "$IS_MONO" = 1 ]; then
   mkdir -p "$(dirname "$MONO_STATE")" 2>/dev/null || true
   printf '%s\n' "$FAM" > "$MONO_STATE" 2>/dev/null || true
@@ -96,7 +96,7 @@ done
 # user customizations (emoji fallback, hinting, ...) survive font switches.
 mkdir -p "$HOME/.config/fontconfig/conf.d" 2>/dev/null || true
 LEGACY="$HOME/.config/fontconfig/fonts.conf"
-if [ -f "$LEGACY" ] && grep -q 'jhqs system font' "$LEGACY" 2>/dev/null; then
+if [ -f "$LEGACY" ] && grep -q 'solstice system font' "$LEGACY" 2>/dev/null; then
   rm -f "$LEGACY" 2>/dev/null || true
 fi
 FAM="$FAM" MONO_FAM="${MONO_FAM:-}" python3 <<'EOF' 2>/dev/null || true
@@ -121,18 +121,18 @@ blocks = "\n".join(
 xml = """<?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
-  <!-- jhqs system font (managed by Style -> Font, do not hand-edit) -->
+  <!-- solstice system font (managed by Style -> Font, do not hand-edit) -->
 {blocks}
 </fontconfig>
 """.format(blocks=blocks)
-with open(os.path.expanduser("~/.config/fontconfig/conf.d/10-jhqs-system-font.conf"), "w") as fh:
+with open(os.path.expanduser("~/.config/fontconfig/conf.d/10-solstice-system-font.conf"), "w") as fh:
     fh.write(xml)
 EOF
 fc-cache -f "$HOME/.local/share/fonts" "$HOME/.fonts" 2>/dev/null || fc-cache 2>/dev/null || true
 
 XSET="$HOME/.config/xsettingsd/xsettingsd.conf"
 if [ -f "$XSET" ]; then
-  grep -v '^Gtk/FontName' "$XSET" > /tmp/jhqs-xsettingsd.conf 2>/dev/null && mv /tmp/jhqs-xsettingsd.conf "$XSET"
+  grep -v '^Gtk/FontName' "$XSET" > /tmp/solstice-xsettingsd.conf 2>/dev/null && mv /tmp/solstice-xsettingsd.conf "$XSET"
   printf 'Gtk/FontName "%s"\n' "$IFACE" >> "$XSET"
   pkill -HUP -x xsettingsd 2>/dev/null || true
 fi

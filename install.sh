@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# jhqs installer.
+# solstice installer.
 #
 # One-liner (fresh install):
-#   curl -fsSL https://raw.githubusercontent.com/corzyy/jhqs/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/corzyy/solstice/main/install.sh | bash
 #
 # Or run from a checkout:  ./install.sh
 #
-# Installs the jhqs quickshell to ${JHQS_DEST:-$HOME/.config/quickshell/jhqs},
+# Installs the solstice quickshell to ${SOLSTICE_DEST:-$HOME/.config/quickshell/solstice},
 # preserving any existing config/ and themes/snapshots/.
 set -u
 
-REPO="${JHQS_REPO:-https://github.com/corzyy/jhqs}"
-REF="${JHQS_REF:-main}"
-DEST="${JHQS_DEST:-$HOME/.config/quickshell/jhqs}"
+REPO="${SOLSTICE_REPO:-https://github.com/corzyy/solstice}"
+REF="${SOLSTICE_REF:-main}"
+DEST="${SOLSTICE_DEST:-$HOME/.config/quickshell/solstice}"
 ASSUME_YES=0
-NO_START="${JHQS_NO_START:-0}"
+NO_START="${SOLSTICE_NO_START:-0}"
 
 usage() {
     cat <<EOF
-jhqs installer
+solstice installer
 
 Usage: install.sh [options]
 
@@ -28,10 +28,10 @@ Options:
   -h, --help         Show this help
 
 Environment:
-  JHQS_REPO          Git remote to install from (default: $REPO)
-  JHQS_REF           Branch/tag to install (default: $REF)
-  JHQS_DEST          Install directory (default: $DEST)
-  JHQS_NO_START=1    Same as --no-start
+  SOLSTICE_REPO          Git remote to install from (default: $REPO)
+  SOLSTICE_REF           Branch/tag to install (default: $REF)
+  SOLSTICE_DEST          Install directory (default: $DEST)
+  SOLSTICE_NO_START=1    Same as --no-start
 EOF
 }
 
@@ -75,7 +75,7 @@ if ! command -v quickshell >/dev/null 2>&1 && ! command -v qs >/dev/null 2>&1; t
 fi
 
 # Prefer a local checkout when this script sits next to shell.qml.
-SRC="${JHQS_SRC:-}"
+SRC="${SOLSTICE_SRC:-}"
 if [[ -z "$SRC" ]]; then
     SELF_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-}")" >/dev/null 2>&1 && pwd || true)"
     if [[ -n "$SELF_DIR" && -f "$SELF_DIR/shell.qml" ]]; then
@@ -88,7 +88,7 @@ if [[ -n "$SRC" && -f "$SRC/shell.qml" ]]; then
 else
     SRC=""
     echo "Cloning $REPO ($REF) ..."
-    SRC="$(mktemp -d "${TMPDIR:-/tmp}/jhqs-install.XXXXXX")"
+    SRC="$(mktemp -d "${TMPDIR:-/tmp}/solstice-install.XXXXXX")"
     cleanup_src() { [[ -n "$SRC" && "$SRC" == /tmp/* ]] && rm -rf "$SRC"; }
     trap cleanup_src EXIT INT TERM
     if ! git clone --depth 1 --branch "$REF" "$REPO" "$SRC"; then
@@ -102,7 +102,7 @@ else
 fi
 
 if [[ -e "$DEST" ]]; then
-    echo "jhqs already exists at $DEST."
+    echo "solstice already exists at $DEST."
     if ! confirm "Reinstall/update it (keeping config/ and themes/snapshots/)?"; then
         echo "Aborted." >&2
         exit 1
@@ -111,7 +111,7 @@ fi
 
 PARENT="$(dirname "$DEST")"
 mkdir -p "$PARENT"
-TMP="$(mktemp -d "$PARENT/.jhqs-install.XXXXXX")"
+TMP="$(mktemp -d "$PARENT/.solstice-install.XXXXXX")"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT INT TERM
 
@@ -162,7 +162,7 @@ if [[ -d "$KEEP/themes/snapshots" ]]; then
     cp -a "$KEEP/themes/snapshots" "$DEST/themes/snapshots"
 fi
 
-chmod +x "$DEST/scripts/"*.sh "$DEST/scripts/jhqs" 2>/dev/null || true
+chmod +x "$DEST/scripts/"*.sh "$DEST/scripts/solstice" 2>/dev/null || true
 
 # Launcher emoji picker needs a colour emoji font; user-level, best-effort.
 if command -v fc-list >/dev/null 2>&1 && ! fc-list 2>/dev/null | grep -qi "Noto Color Emoji"; then
@@ -171,19 +171,19 @@ if command -v fc-list >/dev/null 2>&1 && ! fc-list 2>/dev/null | grep -qi "Noto 
 fi
 
 echo ""
-echo "jhqs installed to $DEST"
+echo "solstice installed to $DEST"
 
 if ((NO_START)); then
-    echo "Start it with:  jhqs start   (or: qs -d -c jhqs)"
-elif [[ -n "${JHQS_DEST:-}" ]]; then
+    echo "Start it with:  solstice start   (or: qs -d -c solstice)"
+elif [[ -n "${SOLSTICE_DEST:-}" ]]; then
     echo "Done. (Test install — shell not started.)"
 elif command -v quickshell >/dev/null 2>&1; then
-    if quickshell ipc -c jhqs call jhqs reload >/dev/null 2>&1 \
-       || "$DEST/scripts/jhqs" start >/dev/null 2>&1; then
+    if quickshell ipc -c solstice call solstice reload >/dev/null 2>&1 \
+       || "$DEST/scripts/solstice" start >/dev/null 2>&1; then
         echo "Shell started."
     else
-        echo "Installed. Start it manually with:  jhqs start"
+        echo "Installed. Start it manually with:  solstice start"
     fi
 else
-    echo "Installed. Install quickshell, then run:  jhqs start"
+    echo "Installed. Install quickshell, then run:  solstice start"
 fi

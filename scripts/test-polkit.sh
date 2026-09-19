@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== jhqs Polkit test ==="
+echo "=== solstice Polkit test ==="
 echo "Agent status:"
-STATUS=$(quickshell ipc -c jhqs call polkit status 2>&1 || echo "  (quickshell not running? start with: qs -c jhqs)")
+STATUS=$(quickshell ipc -c solstice call polkit status 2>&1 || echo "  (quickshell not running? start with: qs -c solstice)")
 echo "  $STATUS"
 echo ""
 if echo "$STATUS" | grep -qi "not registered"; then
@@ -30,8 +30,8 @@ if command -v pkexec >/dev/null 2>&1; then
         echo "[test] ✗ cancelled / dismissed (rc $rc) — dialog Cancel/Esc works"
     else
         echo "[test] exit rc=$rc (0=success, 126/127=cancel, other=error)"
-        echo "      check: quickshell ipc -c jhqs call polkit status"
-        echo "      logs:  journalctl --user -u quickshell  or  qs log  (verbose: qs -c jhqs --verbose)"
+        echo "      check: quickshell ipc -c solstice call polkit status"
+        echo "      logs:  journalctl --user -u quickshell  or  qs log  (verbose: qs -c solstice --verbose)"
     fi
 else
     echo "pkexec not found — cannot test"

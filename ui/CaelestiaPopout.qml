@@ -17,7 +17,7 @@
 //                           200ms default effects out
 //
 // Caelestia's bar is vertical so its curtain runs on x; the identical math
-// runs on y for jhqs's horizontal bar (open from the top/bottom panel edge).
+// runs on y for solstice's horizontal bar (open from the top/bottom panel edge).
 //
 // One addition over the reference: the layer surface only maps on open, so
 // the driver waits for the first rendered frame — starting the Behavior at

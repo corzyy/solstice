@@ -10,7 +10,7 @@
 //               over a window captures it (Esc/right click cancels).
 //   Fullscreen  pill unmaps and the whole desktop is grabbed.
 //
-// Opened by the PRINT keybind (`jhqs module screenshot toggle`), dismissed
+// Opened by the PRINT keybind (`solstice module screenshot toggle`), dismissed
 // by Escape, the close button, the toggle again, a lock or an opening bar
 // panel. The backend is scripts/screenshot.sh: the shot lands in the
 // configured folder (default ~/Pictures/Screenshots), on the clipboard and
@@ -199,10 +199,10 @@ Scope {
         // Output options come from Settings > Panels > Screenshot UI
         // (config/screenshot.json).
         environment: ({
-            JHQS_SHOT_DIR: Theme.screenshotSaveDir,
-            JHQS_SHOT_CURSOR: Theme.screenshotIncludeCursor ? "1" : "0",
-            JHQS_SHOT_CLIPBOARD: Theme.screenshotCopyToClipboard ? "1" : "0",
-            JHQS_SHOT_NOTIFY: Theme.screenshotNotify ? "1" : "0"
+            SOLSTICE_SHOT_DIR: Theme.screenshotSaveDir,
+            SOLSTICE_SHOT_CURSOR: Theme.screenshotIncludeCursor ? "1" : "0",
+            SOLSTICE_SHOT_CLIPBOARD: Theme.screenshotCopyToClipboard ? "1" : "0",
+            SOLSTICE_SHOT_NOTIFY: Theme.screenshotNotify ? "1" : "0"
         })
         onExited: (code, status) => {
             // slurp cancelled (Escape / empty selection): bring the pill

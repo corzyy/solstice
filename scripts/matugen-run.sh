@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# matugen-run.sh — matugen wrapper that respects jhqs Application Theming toggles.
+# matugen-run.sh — matugen wrapper that respects solstice Application Theming toggles.
 # Ported from DMS `dms matugen queue` template-skip logic (runUserTemplates /
 # runDmsTemplates + per-template bools), adapted to plain matugen.
 #
@@ -16,7 +16,7 @@
 set -u
 
 SRC_CFG="$HOME/.config/matugen/config.toml"
-THEMING_JSON="$HOME/.config/quickshell/jhqs/config/theming_settings.json"
+THEMING_JSON="$HOME/.config/quickshell/solstice/config/theming_settings.json"
 
 MATUGEN_BIN="matugen"
 [ -x "$HOME/.cargo/bin/matugen" ] && MATUGEN_BIN="$HOME/.cargo/bin/matugen"
@@ -29,9 +29,9 @@ if [ ! -f "$SRC_CFG" ]; then
   exit 2
 fi
 
-SYNC_CFG="$(mktemp /tmp/jhqs-matugen-sync.XXXXXX.toml)"
-PAPIRUS_CFG="$(mktemp /tmp/jhqs-matugen-papirus.XXXXXX.toml)"
-KITTY_CFG="$(mktemp /tmp/jhqs-matugen-kitty.XXXXXX.toml)"
+SYNC_CFG="$(mktemp /tmp/solstice-matugen-sync.XXXXXX.toml)"
+PAPIRUS_CFG="$(mktemp /tmp/solstice-matugen-papirus.XXXXXX.toml)"
+KITTY_CFG="$(mktemp /tmp/solstice-matugen-kitty.XXXXXX.toml)"
 
 # Detect requested mode from CLI (ThemeEngine always passes -m <mode>).
 MODE_IS_LIGHT=false

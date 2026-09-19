@@ -32,7 +32,7 @@ download() {
         python3 - "$url" "$dest" 2>/dev/null <<'EOF' && return 0
 import sys, urllib.request
 try:
-    req = urllib.request.Request(sys.argv[1], headers={"User-Agent": "jhqs-webapp/1.0"})
+    req = urllib.request.Request(sys.argv[1], headers={"User-Agent": "solstice-webapp/1.0"})
     with urllib.request.urlopen(req, timeout=20) as r, open(sys.argv[2], "wb") as f:
         f.write(r.read(2 * 1024 * 1024))
 except Exception:
@@ -61,7 +61,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 if [[ "${1:-}" == "--repair" ]]; then
-    [[ -x "$LAUNCHER" ]] || LAUNCHER="$HOME/.config/quickshell/jhqs/scripts/webapp-launch.sh"
+    [[ -x "$LAUNCHER" ]] || LAUNCHER="$HOME/.config/quickshell/solstice/scripts/webapp-launch.sh"
     repaired=0
     if [[ -d "$DESKTOP_DIR" ]]; then
         while IFS= read -r -d '' f; do
@@ -71,7 +71,7 @@ if [[ "${1:-}" == "--repair" ]]; then
             app_url="$(grep -o -E 'https?://[^ "]*' <<<"$exec_line" | tail -n1 || true)"
             [[ -z "$app_url" ]] && app_url="$(grep -o -E -- '--app=[^ "]*' <<<"$exec_line" | tail -n1 | sed 's/^--app=//' || true)"
             [[ -n "$app_url" ]] || continue
-            tmp="$(mktemp "${TMPDIR:-/tmp}/jhqs-repair.XXXXXX")" || continue
+            tmp="$(mktemp "${TMPDIR:-/tmp}/solstice-repair.XXXXXX")" || continue
             sed -E "s|^Exec=.*|Exec=\"$(desk_escape "$LAUNCHER")\" \"$(desk_escape "$app_url")\"|" "$f" >"$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }
             chmod +x "$tmp" 2>/dev/null || true
             mv -f "$tmp" "$f" 2>/dev/null || { rm -f "$tmp"; continue; }
@@ -144,7 +144,7 @@ resolve_icon() {
         echo "Fetching site icon…"
     fi
     if [[ "$ref" =~ ^https?:// ]]; then
-        tmp="$(mktemp "${TMPDIR:-/tmp}/jhqs-icon.XXXXXX")" || return 1
+        tmp="$(mktemp "${TMPDIR:-/tmp}/solstice-icon.XXXXXX")" || return 1
         if download "$ref" "$tmp" && is_image "$tmp"; then
             ext="png"
             case "$ref" in
@@ -206,7 +206,7 @@ resolve_icon "$ICON_REF" || true
 
 DESKTOP_FILE="$DESKTOP_DIR/$APP_NAME.desktop"
 EXEC_LINE="\"$(desk_escape "$LAUNCHER")\" \"$(desk_escape "$APP_URL")\""
-tmp_desktop="$(mktemp "${TMPDIR:-/tmp}/jhqs-desktop.XXXXXX")" || {
+tmp_desktop="$(mktemp "${TMPDIR:-/tmp}/solstice-desktop.XXXXXX")" || {
     echo "Error: cannot create temp file." >&2
     exit 2
 }
@@ -222,8 +222,8 @@ tmp_desktop="$(mktemp "${TMPDIR:-/tmp}/jhqs-desktop.XXXXXX")" || {
     echo "Terminal=false"
     echo "StartupNotify=true"
     echo "Categories=Network;WebBrowser;"
-    echo "X-jhqs-WebApp=true"
-    echo "X-jhqs-WebApp-URL=$APP_URL"
+    echo "X-solstice-WebApp=true"
+    echo "X-solstice-WebApp-URL=$APP_URL"
 } >"$tmp_desktop" || {
     echo "Error: cannot write desktop entry." >&2
     rm -f "$tmp_desktop"

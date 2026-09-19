@@ -47,7 +47,7 @@ Scope {
         // session, registration fails permanently with "An authentication
         // agent already exists for the given subject". Retrying forever only
         // spams the journal. We back off and stop, and can be re-armed with
-        // `quickshell ipc -c jhqs call polkit retry`.
+        // `quickshell ipc -c solstice call polkit retry`.
         property int failures: 0
         readonly property int maxFailures: 5
         interval: failures >= 3 ? 30000 : 8000
@@ -58,10 +58,10 @@ Scope {
             if (polkitScope.agentRegistered || polkitScope.agentActive) { failures = 0; return }
             failures++
             if (failures >= maxFailures) {
-                console.log("[jhqs][polkit] giving up after " + failures + " attempts — another authentication agent is likely already registered")
+                console.log("[solstice][polkit] giving up after " + failures + " attempts — another authentication agent is likely already registered")
                 return
             }
-            console.log("[jhqs][polkit] no agent registered — retrying listener registration (" + failures + "/" + maxFailures + ")")
+            console.log("[solstice][polkit] no agent registered — retrying listener registration (" + failures + "/" + maxFailures + ")")
             polkitScope.recreateAgent()
         }
     }
@@ -163,7 +163,7 @@ Scope {
         }
         function cancel(): string { if (flow) flow.cancelAuthenticationRequest(); return "cancel sent" }
         function retry(): string { polkitScope.retryAgent(); return "polkit agent re-register requested" }
-        function trigger(): string { return "run: ~/.config/quickshell/jhqs/scripts/test-polkit.sh  or  pkexec --disable-internal-agent id" }
+        function trigger(): string { return "run: ~/.config/quickshell/solstice/scripts/test-polkit.sh  or  pkexec --disable-internal-agent id" }
     }
 
     // Single fullscreen window per screen: no separate backdrop layer, so the

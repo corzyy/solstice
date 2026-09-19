@@ -562,7 +562,7 @@ Singleton {
     property int umbAnimDurMove: 500
     property int umbAnimDurWorkspace: 400
 
-    readonly property string _applyScript: Quickshell.env("HOME") + "/.config/quickshell/jhqs/scripts/umbriel-apply.py"
+    readonly property string _applyScript: Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/umbriel-apply.py"
 
     function _clampInt(v: var, lo: int, hi: int, fb: int): int {
         let n = Math.round(Number(v))

@@ -23,7 +23,7 @@ Singleton {
     property bool enabled: true
 
     // One-time marker: everything decoded before it is stale history.
-    readonly property string _marker: "jhqs-log-marker-" + Date.now() + "-" + Math.floor(Math.random() * 4294967296).toString(16)
+    readonly property string _marker: "solstice-log-marker-" + Date.now() + "-" + Math.floor(Math.random() * 4294967296).toString(16)
     property bool _started: false
 
     function start(): void {
@@ -95,7 +95,7 @@ Singleton {
         writerProc.command = [
             "bash", "-c",
             "printf '%s\\n' \"$1\" >> \"$2\"",
-            "jhqs-log", payload, errorLogPath
+            "solstice-log", payload, errorLogPath
         ]
         writerProc.running = true
     }
@@ -107,7 +107,7 @@ Singleton {
 
     Process {
         id: ensureDirProc
-        command: ["bash", "-c", "mkdir -p \"$1\"", "jhqs-log", root.logDir]
+        command: ["bash", "-c", "mkdir -p \"$1\"", "solstice-log", root.logDir]
         onExited: root.startTail()
     }
 

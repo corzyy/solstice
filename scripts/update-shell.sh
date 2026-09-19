@@ -1,11 +1,11 @@
 #!/bin/bash
-# Update the jhqs quickshell from GitHub:
+# Update the solstice quickshell from GitHub:
 #   git clone the repo, install it over the live checkout (keeping the user's
 #   config/ and themes/snapshots/), then restart the shell.
 set -u
 
-REPO="${JHQS_REPO:-https://github.com/corzyy/jhqs}"
-DEST="${JHQS_DEST:-$HOME/.config/quickshell/jhqs}"
+REPO="${SOLSTICE_REPO:-https://github.com/corzyy/solstice}"
+DEST="${SOLSTICE_DEST:-$HOME/.config/quickshell/solstice}"
 NO_RELOAD=0
 
 usage() {
@@ -13,8 +13,8 @@ usage() {
     echo ""
     echo "Clones $REPO and installs it over $DEST,"
     echo "preserving config/ and themes/snapshots/, then restarts the shell."
-    echo "Override with JHQS_REPO / JHQS_DEST env vars."
-    echo "Set JHQS_NO_RELOAD=1 or pass --no-reload to skip the restart."
+    echo "Override with SOLSTICE_REPO / SOLSTICE_DEST env vars."
+    echo "Set SOLSTICE_NO_RELOAD=1 or pass --no-reload to skip the restart."
 }
 
 for arg in "$@"; do
@@ -29,7 +29,7 @@ for arg in "$@"; do
             ;;
     esac
 done
-[[ -n "${JHQS_NO_RELOAD:-}" ]] && NO_RELOAD=1
+[[ -n "${SOLSTICE_NO_RELOAD:-}" ]] && NO_RELOAD=1
 
 if ! command -v git >/dev/null 2>&1; then
     echo "git is not installed — cannot update the shell." >&2
@@ -39,7 +39,7 @@ fi
 # Work on the same filesystem as DEST so the swap below is a fast rename.
 PARENT="$(dirname "$DEST")"
 mkdir -p "$PARENT"
-TMP="$(mktemp -d "$PARENT/.jhqs-update.XXXXXX")"
+TMP="$(mktemp -d "$PARENT/.solstice-update.XXXXXX")"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT INT TERM
 
@@ -76,7 +76,7 @@ if [[ -d "$TMP/repo/config" && -d "$KEEP/config" ]]; then
     done
 fi
 
-if [[ -d "$DEST/.git" ]] && [[ -z "${JHQS_DEST:-}" ]]; then
+if [[ -d "$DEST/.git" ]] && [[ -z "${SOLSTICE_DEST:-}" ]]; then
     if [[ -n "$(git -C "$DEST" status --porcelain 2>/dev/null)" ]]; then
         echo "Note: local changes in $DEST — they will be replaced by the clone."
         echo ""
@@ -105,20 +105,20 @@ if [[ -d "$KEEP/themes/snapshots" ]]; then
     cp -a "$KEEP/themes/snapshots" "$DEST/themes/snapshots"
 fi
 
-chmod +x "$DEST/scripts/"*.sh "$DEST/scripts/jhqs" 2>/dev/null || true
+chmod +x "$DEST/scripts/"*.sh "$DEST/scripts/solstice" 2>/dev/null || true
 
 # Restart the shell so the new files take effect immediately.
-# Skipped for test installs (JHQS_DEST) unless explicitly allowed.
+# Skipped for test installs (SOLSTICE_DEST) unless explicitly allowed.
 if ((NO_RELOAD)); then
     echo ""
     echo "Done. Restart skipped (--no-reload); restart quickshell manually to apply the update."
-elif [[ -n "${JHQS_DEST:-}" ]]; then
+elif [[ -n "${SOLSTICE_DEST:-}" ]]; then
     echo ""
     echo "Done. (Test install — live shell not restarted.)"
 elif command -v quickshell >/dev/null 2>&1; then
     echo ""
     echo "Restarting shell ..."
-    if quickshell ipc -c jhqs call jhqs reload >/dev/null 2>&1; then
+    if quickshell ipc -c solstice call solstice reload >/dev/null 2>&1; then
         echo "Done."
     else
         echo "Update installed, but the automatic restart failed."

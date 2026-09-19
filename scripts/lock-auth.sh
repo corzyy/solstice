@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 PASS="${1:-}"
-PIN_FILE="$HOME/.config/quickshell/jhqs/config/pin"
+PIN_FILE="$HOME/.config/quickshell/solstice/config/pin"
 
 if [ -f "$PIN_FILE" ]; then
     PIN=$(tr -d '\r\n' < "$PIN_FILE")

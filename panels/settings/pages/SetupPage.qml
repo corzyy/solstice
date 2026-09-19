@@ -146,7 +146,7 @@ NexusControls.PageBase {
         text: "Shell update"
         subtext: "Reinstall from GitHub, keeping config/"
         onClicked: Quickshell.execDetached(["bash", "-c",
-            "kitty --class jhqs-shell-update --title \"Shell Update\" bash -lc 'bash \"$HOME/.config/quickshell/jhqs/scripts/update-shell.sh\"; echo; echo \"--- Done ---\"; read -n1 -s' &"])
+            "kitty --class solstice-shell-update --title \"Shell Update\" bash -lc 'bash \"$HOME/.config/quickshell/solstice/scripts/update-shell.sh\"; echo; echo \"--- Done ---\"; read -n1 -s' &"])
     }
     NexusControls.NavRow {
         visible: root.view === "update"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# apply-qt.sh — point qt5ct/qt6ct at the matugen-generated colors (jhqs).
+# apply-qt.sh — point qt5ct/qt6ct at the matugen-generated colors (solstice).
 # Adapted from DankMaterialShell quickshell/scripts/qt.sh:
 # DMS points qt*ct at ~/.local/share/color-schemes/DankMatugen.colors,
-# jhqs generates ~/.config/qt{5,6}ct/colors/matugen.conf via matugen instead,
+# solstice generates ~/.config/qt{5,6}ct/colors/matugen.conf via matugen instead,
 # so we only flip qt*ct.conf to custom_palette + color_scheme_path.
 set -u
 

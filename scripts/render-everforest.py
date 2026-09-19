@@ -16,7 +16,7 @@ if len(sys.argv) > 1:
         if len(sys.argv) > 2 and Path(sys.argv[2]).exists():
             SRC = Path(sys.argv[2])
 if SRC is None:
-    SRC = Path(f"{HOME}/.config/quickshell/jhqs/themes/everforest-soft-{MODE}.json")
+    SRC = Path(f"{HOME}/.config/quickshell/solstice/themes/everforest-soft-{MODE}.json")
 CONFIG = Path(f"{HOME}/.config/matugen/config.toml")
 
 if not SRC.exists():

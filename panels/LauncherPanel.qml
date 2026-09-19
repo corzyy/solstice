@@ -213,7 +213,7 @@ Scope {
         return launcherScope.webAppList
     }
 
-    readonly property string webAppScriptsDir: Quickshell.env("HOME") + "/.config/quickshell/jhqs/scripts"
+    readonly property string webAppScriptsDir: Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts"
     function webAppBin(kind: string): string {
         if (kind === "remove") return launcherScope.webAppScriptsDir + "/webapp-remove.sh"
         if (kind === "list") return launcherScope.webAppScriptsDir + "/webapp-list.sh"
@@ -366,7 +366,7 @@ Scope {
             if (code === 127 && !launcherScope.webAppListRetried) {
                 launcherScope.webAppListRetried = true
                 launcherScope.webAppLoading = true
-                webAppListProc.command = ["bash", "-c", "DESKTOP_DIR=\"$HOME/.local/share/applications\"; find \"$DESKTOP_DIR\" -maxdepth 3 -name '*.desktop' -print0 2>/dev/null | while IFS= read -r -d '' f; do if grep -q -E '^Exec=.*(launch-webapp|webapp-handler|webapp-launch|jhqs-webapp|--app=)' \"$f\" 2>/dev/null; then base=$(basename \"$f\" .desktop); dname=$(grep -m1 '^Name=' \"$f\" 2>/dev/null | cut -d= -f2-); exec=$(grep -m1 '^Exec=' \"$f\" 2>/dev/null | cut -d= -f2-); icon=$(grep -m1 '^Icon=' \"$f\" 2>/dev/null | cut -d= -f2-); printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$base\" \"$f\" \"$dname\" \"$exec\" \"$icon\"; fi; done"]
+                webAppListProc.command = ["bash", "-c", "DESKTOP_DIR=\"$HOME/.local/share/applications\"; find \"$DESKTOP_DIR\" -maxdepth 3 -name '*.desktop' -print0 2>/dev/null | while IFS= read -r -d '' f; do if grep -q -E '^Exec=.*(launch-webapp|webapp-handler|webapp-launch|solstice-webapp|--app=)' \"$f\" 2>/dev/null; then base=$(basename \"$f\" .desktop); dname=$(grep -m1 '^Name=' \"$f\" 2>/dev/null | cut -d= -f2-); exec=$(grep -m1 '^Exec=' \"$f\" 2>/dev/null | cut -d= -f2-); icon=$(grep -m1 '^Icon=' \"$f\" 2>/dev/null | cut -d= -f2-); printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$base\" \"$f\" \"$dname\" \"$exec\" \"$icon\"; fi; done"]
                 if (!webAppListProc.running) webAppListProc.running = true
             } else {
                 launcherScope.webAppListRetried = false
@@ -435,7 +435,7 @@ Scope {
     }
     FileView {
         id: emojiRecentFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/emoji_recent.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/emoji_recent.json"
         blockLoading: true; printErrors: false
         adapter: JsonAdapter { property var recent: [] }
     }

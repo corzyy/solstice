@@ -16,7 +16,7 @@ import "./pages" as Pages
 //   - pages: margins 28, content capped at 800, StackView push/pop animation
 //     (exit fade 200ms; enter holds 200ms then fades 300ms while sliding
 //     from ±96px)
-// Backends stay jhqs (Theme, SettingsService, NetworkService, …).
+// Backends stay solstice (Theme, SettingsService, NetworkService, …).
 // Unlike the other shell surfaces this is a regular toplevel window
 // (FloatingWindow), managed by the compositor like any other app window:
 // it shows up in task switchers, can be moved/resized freely and closed by

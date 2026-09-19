@@ -11,7 +11,7 @@ set -u
 
 FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 FONT_FILE="$FONT_DIR/NotoColorEmoji.ttf"
-URL="${JHQS_EMOJI_FONT_URL:-https://raw.githubusercontent.com/googlefonts/noto-emoji/main/2D/fonts/NotoColorEmoji.ttf}"
+URL="${SOLSTICE_EMOJI_FONT_URL:-https://raw.githubusercontent.com/googlefonts/noto-emoji/main/2D/fonts/NotoColorEmoji.ttf}"
 
 if fc-list 2>/dev/null | grep -qi "Noto Color Emoji"; then
     echo "emoji font: already installed"

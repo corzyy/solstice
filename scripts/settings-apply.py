@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""settings-apply.py — persistent writers for the jhqs Settings panel.
+"""settings-apply.py — persistent writers for the solstice Settings panel.
 
 Usage: settings-apply.py <domain> <key=value>...
 Domains: kitty | fish | brightness
@@ -71,7 +71,7 @@ def fish(pairs: dict) -> None:
         FISH_PROMPT.symlink_to(src)
     else:
         subprocess.run(
-            ["bash", "-c", f"fish -c 'set -U jhqs_prompt {style}' 2>/dev/null || true"],
+            ["bash", "-c", f"fish -c 'set -U solstice_prompt {style}' 2>/dev/null || true"],
             check=False,
         )
 

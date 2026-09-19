@@ -116,7 +116,7 @@ Singleton {
     // ---- persistence (config/language.json) ------------------------------
     FileView {
         id: languageFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/language.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/language.json"
         watchChanges: true; blockLoading: true; printErrors: false
         onFileChanged: languageReloadDebounce.restart()
         adapter: JsonAdapter {

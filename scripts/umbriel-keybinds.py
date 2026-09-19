@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""umbriel-keybinds.py — list and edit Umbriel keybinds for the jhqs settings app.
+"""umbriel-keybinds.py — list and edit Umbriel keybinds for the solstice settings app.
 
 Usage:
     umbriel-keybinds.py list [--json]
@@ -23,7 +23,7 @@ default configs/keybinds-user.toml, or the `--file` target
 (keybinds-user.toml / keybinds-system.toml). Only the quoted chord on the
 matching line is replaced, so comments and table-form options survive. A bind
 moved to a chord that is already taken disables the other line with a
-`# jhqs-off:` prefix (still readable, easy to restore). Umbriel is asked to
+`# solstice-off:` prefix (still readable, easy to restore). Umbriel is asked to
 reload after every write. JSON mode prints
 
     {"ok": bool, "action": str, "chord": str, "message": str,
@@ -51,7 +51,7 @@ CONFIG_TOML = os.path.join(UMBRIEL_DIR, "config.toml")
 KEYBINDS_TOML = os.path.join(UMBRIEL_DIR, "configs", "keybinds-user.toml")
 EDITABLE_FILES = ("keybinds-user.toml", "keybinds-system.toml")
 
-DISABLED_PREFIX = "# jhqs-off: "
+DISABLED_PREFIX = "# solstice-off: "
 SECTION_RE = re.compile(r"^\s*\[")
 ACTION_RE = re.compile(r'action\s*=\s*"((?:[^"\\]|\\.)*)"')
 

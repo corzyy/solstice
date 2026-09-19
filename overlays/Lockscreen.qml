@@ -88,7 +88,7 @@ Scope {
 
     Process {
         id: wallpaperResolveProc
-        command: ["bash", "-c", "for f in \"$(cat ~/.config/quickshell/jhqs/config/current_wallpaper.txt 2>/dev/null)\" \"$(cat ~/.cache/swaybg/current 2>/dev/null)\" \"$(cat ~/.cache/awww/current 2>/dev/null)\"; do f=\"${f#file://}\"; if [ -n \"$f\" ] && [ -f \"$f\" ]; then printf '%s' \"$f\"; exit 0; fi; done"]
+        command: ["bash", "-c", "for f in \"$(cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null)\" \"$(cat ~/.cache/swaybg/current 2>/dev/null)\" \"$(cat ~/.cache/awww/current 2>/dev/null)\"; do f=\"${f#file://}\"; if [ -n \"$f\" ] && [ -f \"$f\" ]; then printf '%s' \"$f\"; exit 0; fi; done"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: lockScope.wallpaperPath = String(text || "").trim()

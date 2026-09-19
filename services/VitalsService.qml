@@ -8,7 +8,7 @@ Singleton {
 
     FileView {
         id: vitalsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/vitals.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/vitals.json"
         watchChanges: true; blockLoading: true; printErrors: false
         onFileChanged: vitalsReloadDebounce.restart()
         adapter: JsonAdapter {

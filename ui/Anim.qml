@@ -1,6 +1,6 @@
 // Anim — Caelestia-expressive animation primitives.
 //
-// Port of caelestia-dots/shell components/Anim.qml + CAnim.qml to jhqs
+// Port of caelestia-dots/shell components/Anim.qml + CAnim.qml to solstice
 // Theme tokens:
 //   type selects a Material-3-expressive duration + BezierSpline curve
 //   (Anim itself), CAnim is the color/opacity counterpart and always uses

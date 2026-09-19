@@ -69,14 +69,14 @@ if [ -f "$OUT" ] && [ "$(stat -c%s "$OUT" 2>/dev/null || echo 0)" -gt 1048576 ];
     mv -f "$OUT" "$OUT.1"
 fi
 
-QS="${JHQS_QS:-}"
+QS="${SOLSTICE_QS:-}"
 if [ -z "$QS" ]; then
     if command -v quickshell >/dev/null 2>&1; then
         QS=quickshell
     elif command -v qs >/dev/null 2>&1; then
         QS=qs
     else
-        echo "log-errors.sh: quickshell binary not found (set JHQS_QS)" >&2
+        echo "log-errors.sh: quickshell binary not found (set SOLSTICE_QS)" >&2
         exit 127
     fi
 fi

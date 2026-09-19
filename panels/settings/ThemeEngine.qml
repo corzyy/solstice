@@ -20,7 +20,7 @@ Item {
     // writeAdapter. No boot fork needed.
     FileView {
         id: themeEngineFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/themes/theme_engine.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/theme_engine.json"
         watchChanges: true; onFileChanged: engineReloadDebounce.restart(); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property string engine: "wallpaper" }
     }
@@ -41,7 +41,7 @@ Item {
 
     FileView {
         id: matugenSettingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/themes/matugen_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/matugen_settings.json"
         watchChanges: true; onFileChanged: engineReloadDebounce.restart(); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property string type: "scheme-tonal-spot"; property string mode: "dark"; property real contrast: 0.0 }
     }
@@ -114,7 +114,7 @@ Item {
 
     FileView {
         id: currentWallpaperFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/current_wallpaper.txt"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/current_wallpaper.txt"
         watchChanges: true; onFileChanged: engineReloadDebounce.restart(); blockLoading: true; printErrors: false
     }
     function currentWallpaperText(): string {
@@ -126,7 +126,7 @@ Item {
     // themes restores the wallpaper belonging to that theme.
     FileView {
         id: themeWallpapersFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/themes/theme_wallpapers.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/theme_wallpapers.json"
         blockLoading: true; printErrors: false
         adapter: JsonAdapter { property var wallpapers: ({}) }
     }
@@ -197,11 +197,11 @@ Item {
     }
 
     function matugenBin(): string {
-        // jhqs Application Theming: route through matugen-run.sh so template
+        // solstice Application Theming: route through matugen-run.sh so template
         // toggles (theming_settings.json) + terminals-always-dark are honored.
         // Provides a "${MATUGEN[@]}" argv array: [bash matugen-run.sh] when
         // executable, else the plain matugen binary.
-        return "RUN=\"$HOME/.config/quickshell/jhqs/scripts/matugen-run.sh\"; if [ -x \"$RUN\" ]; then MATUGEN=(bash \"$RUN\"); else [ -x \"$HOME/.cargo/bin/matugen\" ] && MATUGEN=(\"$HOME/.cargo/bin/matugen\") || MATUGEN=(matugen); fi;"
+        return "RUN=\"$HOME/.config/quickshell/solstice/scripts/matugen-run.sh\"; if [ -x \"$RUN\" ]; then MATUGEN=(bash \"$RUN\"); else [ -x \"$HOME/.cargo/bin/matugen\" ] && MATUGEN=(\"$HOME/.cargo/bin/matugen\") || MATUGEN=(matugen); fi;"
     }
 
     function runMonetApply(wallPath: string) {
@@ -221,14 +221,14 @@ Item {
         let cmd = matugenBin()
         cmd += "WALL=\"$1\"; TYPE=\"$2\"; MODE=\"$3\";"
         cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/swaybg/current 2>/dev/null | tr -d '\\r\\n')\";"
-        cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.config/quickshell/jhqs/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
+        cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
         cmd += " case \"$TYPE\" in scheme-*) ;; *) TYPE=\"scheme-tonal-spot\";; esac; [ \"$MODE\" = \"light\" ] || MODE=\"dark\";"
         cmd += " if [ -f \"$WALL\" ]; then"
         cmd += " \"${MATUGEN[@]}\" image \"$WALL\" -t \"$TYPE\" -m \"$MODE\" --prefer saturation 2>&1 | logger -t matugen;"
         // btop/kitty/gtk reloads are matugen post_hooks — no duplicate sed here.
         // GTK settings.ini/css catch-up runs detached: the serial proc
         // returns as soon as matugen is done (~0.3s).
-        cmd += " (bash \"$HOME/.config/quickshell/jhqs/scripts/apply-gtk.sh\" \"$MODE\" 2>&1 | logger -t gtk) >/dev/null 2>&1 < /dev/null &"
+        cmd += " (bash \"$HOME/.config/quickshell/solstice/scripts/apply-gtk.sh\" \"$MODE\" 2>&1 | logger -t gtk) >/dev/null 2>&1 < /dev/null &"
         cmd += " else echo \"[ThemeEngine] no wallpaper found, Monet skipped\" | logger -t monet; exit 1; fi; echo done"
         if (themeSerialProc.running) { _pendingSpec = "monet:" + wall; return }
         _osdKind = "monet"
@@ -236,7 +236,7 @@ Item {
         // Mode first (the common toggle), variant appended when non-default.
         _osdDetail = mode + (type !== "scheme-tonal-spot" ? " · " + (matugenTypeLabels[type] || type) : "")
         _osdSilent = false
-        themeSerialProc.command = ["bash", "-c", cmd, "jhqs-monet", wall, type, mode]
+        themeSerialProc.command = ["bash", "-c", cmd, "solstice-monet", wall, type, mode]
         themeSerialProc.running = true
     }
 
@@ -248,16 +248,16 @@ Item {
         // SRC/DST/RENDER travel as argv ($1..$3): no quote-escaping bugs with
         // exotic $HOME values. The shell colors update instantly via the
         // atomic DST swap; the slow per-app render runs detached.
-        let src = Quickshell.env("HOME") + "/.config/quickshell/jhqs/themes/" + key + "-" + mode + ".json"
-        let dst = Quickshell.env("HOME") + "/.config/quickshell/jhqs/themes/matugen.json"
-        let render = Quickshell.env("HOME") + "/.config/quickshell/jhqs/scripts/render-everforest.py"
+        let src = Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/" + key + "-" + mode + ".json"
+        let dst = Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/matugen.json"
+        let render = Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/render-everforest.py"
         let label = id.charAt(0).toUpperCase() + id.slice(1)
         label = label.replace(/[^A-Za-z0-9 -]/g, "")
         if (label.length === 0) label = "Theme"
         let cmd = "SRC=\"$1\"; DST=\"$2\"; RENDER=\"$3\"; MODE=\"$4\"; TAG=\"" + id.replace(/[^a-z0-9-]/g, "") + "\"; LBL=\"" + label + "\";"
         cmd += " if [ -f \"$SRC\" ]; then if cmp -s \"$SRC\" \"$DST\" 2>/dev/null; then echo \"[$LBL] $MODE already active, skip\" | logger -t \"$TAG\";"
         cmd += " else TMP=\"$DST.tmp.$$\"; cp -f \"$SRC\" \"$TMP\" && mv -f \"$TMP\" \"$DST\"; rm -f \"$TMP\";"
-        cmd += " (python3 \"$RENDER\" \"$MODE\" \"$SRC\" 2>&1 | logger -t \"$TAG\"; bash \"$HOME/.config/quickshell/jhqs/scripts/apply-gtk.sh\" \"$MODE\" 2>&1 | logger -t gtk) >/dev/null 2>&1 < /dev/null &"
+        cmd += " (python3 \"$RENDER\" \"$MODE\" \"$SRC\" 2>&1 | logger -t \"$TAG\"; bash \"$HOME/.config/quickshell/solstice/scripts/apply-gtk.sh\" \"$MODE\" 2>&1 | logger -t gtk) >/dev/null 2>&1 < /dev/null &"
         cmd += " echo \"[$LBL] $MODE applied from $SRC (shell instant, apps in background)\" | logger -t \"$TAG\"; fi;"
         cmd += " else echo \"[$LBL] source missing $SRC\" | logger -t \"$TAG\"; exit 1; fi;"
         cmd += " echo done"
@@ -266,7 +266,7 @@ Item {
         _osdLabel = label
         _osdDetail = mode
         _osdSilent = !!silent
-        themeSerialProc.command = ["bash", "-c", cmd, "jhqs-preset", src, dst, render, mode]
+        themeSerialProc.command = ["bash", "-c", cmd, "solstice-preset", src, dst, render, mode]
         themeSerialProc.running = true
     }
 

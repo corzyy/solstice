@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# apply-gtk.sh — point GTK3/4 at the matugen-generated colors (jhqs).
+# apply-gtk.sh — point GTK3/4 at the matugen-generated colors (solstice).
 #
 # Fast + idempotent: every write is skipped when the target state already
 # holds, so repeated wallpaper applies cost ~nothing here. matugen's own
@@ -10,7 +10,7 @@ set -u
 
 MODE="${1:-}"
 if [ "$MODE" != "dark" ] && [ "$MODE" != "light" ]; then
-  MODE="$(jq -r '.mode // "dark"' "$HOME/.config/quickshell/jhqs/themes/matugen_settings.json" 2>/dev/null || echo dark)"
+  MODE="$(jq -r '.mode // "dark"' "$HOME/.config/quickshell/solstice/themes/matugen_settings.json" 2>/dev/null || echo dark)"
 fi
 if [ "$MODE" != "dark" ] && [ "$MODE" != "light" ]; then MODE="dark"; fi
 
@@ -34,7 +34,7 @@ ensure_import() {
   if [ -L "$f" ]; then rm -f "$f"; fi
   if [ -f "$f" ]; then
     grep -q "colors.css" "$f" 2>/dev/null && return 0
-    tmp="$(mktemp /tmp/jhqs-gtk.XXXXXX.css)"
+    tmp="$(mktemp /tmp/solstice-gtk.XXXXXX.css)"
     { printf '%b' "$header"; cat "$f"; } > "$tmp" 2>/dev/null && mv -f "$tmp" "$f"
     rm -f "$tmp"
   else
@@ -42,8 +42,8 @@ ensure_import() {
   fi
 }
 
-ensure_import "$GTK3_DIR/gtk.css" '/* jhqs matugen GTK3 (managed by Style, do not hand-edit) */\n@import url("colors.css");\n'
-GTK4_HEADER='/* jhqs matugen GTK4/libadwaita (managed by Style, do not hand-edit) */\n@import url("colors.css");\n'
+ensure_import "$GTK3_DIR/gtk.css" '/* solstice matugen GTK3 (managed by Style, do not hand-edit) */\n@import url("colors.css");\n'
+GTK4_HEADER='/* solstice matugen GTK4/libadwaita (managed by Style, do not hand-edit) */\n@import url("colors.css");\n'
 ensure_import "$GTK4_DIR/gtk.css" "$GTK4_HEADER"
 ensure_import "$GTK4_DIR/gtk-dark.css" "$GTK4_HEADER"
 
@@ -86,9 +86,9 @@ CUR_SCHEME="$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null
 WANT_THEME="'$GTK_THEME'"
 WANT_SCHEME="'$COLOR_SCHEME'"
 
-# jhqs Application Theming → "Sync Mode with Portal": when disabled, leave the
+# solstice Application Theming → "Sync Mode with Portal": when disabled, leave the
 # portal color-scheme alone (mirrors DMS syncModeWithPortal).
-SYNC="$(jq -r '.syncModeWithPortal // true' "$HOME/.config/quickshell/jhqs/config/theming_settings.json" 2>/dev/null || echo true)"
+SYNC="$(jq -r '.syncModeWithPortal // true' "$HOME/.config/quickshell/solstice/config/theming_settings.json" 2>/dev/null || echo true)"
 
 THEME_CHANGED=false
 if [ "$CUR_THEME" != "$WANT_THEME" ]; then

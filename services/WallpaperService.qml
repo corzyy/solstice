@@ -16,7 +16,7 @@ Singleton {
     // ---- settings (config/wallpaper_settings.json) ----
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/wallpaper_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/wallpaper_settings.json"
         watchChanges: true; onFileChanged: reload(); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property string transitionType: "grow"
@@ -154,7 +154,7 @@ Singleton {
     property int thumbsRev: 0
     property var _thumbBatch: null
     property bool _thumbFlushScheduled: false
-    readonly property string thumbCacheDir: Quickshell.env("HOME") + "/.cache/jhqs/wallpaper-thumbs"
+    readonly property string thumbCacheDir: Quickshell.env("HOME") + "/.cache/solstice/wallpaper-thumbs"
 
     function noteThumb(line: string): void {
         try {
@@ -220,7 +220,7 @@ Singleton {
     // ---- current wallpaper ----
     FileView {
         id: currentFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/current_wallpaper.txt"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/current_wallpaper.txt"
         watchChanges: true; onFileChanged: reload(); blockLoading: true; printErrors: false
     }
     readonly property string current: {
@@ -230,7 +230,7 @@ Singleton {
     // ---- recent wallpapers (carousel) ----
     FileView {
         id: recentFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/recent_wallpapers.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/recent_wallpapers.json"
         blockLoading: true; printErrors: false
         adapter: JsonAdapter { property var wallpapers: [] }
     }
@@ -321,9 +321,9 @@ Singleton {
         let cmd = "WALL=\"$1\"; MODE=\"$2\";"
         cmd += "if command -v swaybg >/dev/null 2>&1 && [ -f \"$WALL\" ]; then nohup swaybg -i \"$WALL\" -m \"$MODE\" >/dev/null 2>&1 < /dev/null & NEW=$!; sleep 0.5;"
         cmd += " if kill -0 \"$NEW\" 2>/dev/null; then for p in $(pgrep -x swaybg 2>/dev/null); do [ \"$p\" = \"$NEW\" ] || kill \"$p\" 2>/dev/null || true; done;"
-        cmd += " else echo \"[jhqs] swaybg start failed, keeping current wallpaper\" >&2; fi; "
-        cmd += "else echo \"[jhqs] swaybg missing or wallpaper invalid — wallpaper unchanged\" >&2; fi; "
-        Quickshell.execDetached(["bash", "-c", cmd, "jhqs-wallpaper", path, mode])
+        cmd += " else echo \"[solstice] swaybg start failed, keeping current wallpaper\" >&2; fi; "
+        cmd += "else echo \"[solstice] swaybg missing or wallpaper invalid — wallpaper unchanged\" >&2; fi; "
+        Quickshell.execDetached(["bash", "-c", cmd, "solstice-wallpaper", path, mode])
     }
     // Commit: display + current-file pointers + recents ring.
     function setWallpaperDisplay(path: string): bool {
@@ -331,8 +331,8 @@ Singleton {
         if (path.includes("\n") || path.includes("\r")) return false
         spawnSwaybg(path)
         previewPath = ""
-        let cmd = "WALL=\"$1\"; mkdir -p ~/.cache/swaybg ~/.cache/awww ~/.config/quickshell/jhqs/config 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/swaybg/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/awww/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.config/quickshell/jhqs/config/current_wallpaper.txt 2>/dev/null"
-        Quickshell.execDetached(["bash", "-c", cmd, "jhqs-wallpaper-state", path])
+        let cmd = "WALL=\"$1\"; mkdir -p ~/.cache/swaybg ~/.cache/awww ~/.config/quickshell/solstice/config 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/swaybg/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/awww/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null"
+        Quickshell.execDetached(["bash", "-c", cmd, "solstice-wallpaper-state", path])
         pushRecent(path)
         return true
     }

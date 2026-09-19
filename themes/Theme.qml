@@ -8,7 +8,7 @@ Singleton {
 
     FileView {
         id: colorFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/themes/matugen.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/matugen.json"
         printErrors: false; watchChanges: true; blockLoading: true
         onFileChanged: colorReloadDebounce.restart()
         adapter: JsonAdapter {
@@ -163,7 +163,7 @@ Singleton {
 
     FileView {
         id: fontFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/font_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/font_settings.json"
         watchChanges: true; onFileChanged: debouncedReload(fontFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property string fontFamily: "Adwaita Sans"; property int fontSize: 11 }
     }
@@ -188,7 +188,7 @@ Singleton {
         if (fontApplyProc.running) return
         let p = _fontApplyPending
         _fontApplyPending = null
-        let script = Quickshell.env("HOME") + "/.config/quickshell/jhqs/scripts/apply-font.sh"
+        let script = Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/apply-font.sh"
         fontApplyProc.command = ["bash", script, p.family, p.size]
         fontApplyProc.running = true
     }
@@ -211,7 +211,7 @@ Singleton {
 
     FileView {
         id: shellFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/topbar_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/topbar_settings.json"
         watchChanges: true; onFileChanged: debouncedReload(shellFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property int radius: 0
@@ -661,7 +661,7 @@ Singleton {
 
     FileView {
         id: dndFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/dnd.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/dnd.json"
         watchChanges: true; onFileChanged: debouncedReload(dndFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property bool enabled: false }
     }
@@ -671,7 +671,7 @@ Singleton {
 
     FileView {
         id: gamemodeFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/gamemode.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/gamemode.json"
         watchChanges: true; onFileChanged: debouncedReload(gamemodeFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property bool enabled: false }
     }
@@ -681,7 +681,7 @@ Singleton {
 
     FileView {
         id: notifFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/notifications.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/notifications.json"
         watchChanges: true; onFileChanged: debouncedReload(notifFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property int timeout: 5; property string position: "top-right" }
     }
@@ -709,7 +709,7 @@ Singleton {
     // 1200 ms.
     FileView {
         id: osdFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/osd.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/osd.json"
         watchChanges: true; onFileChanged: debouncedReload(osdFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property bool volumeEnabled: true
@@ -729,7 +729,7 @@ Singleton {
 
     FileView {
         id: calendarFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/calendar.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/calendar.json"
         watchChanges: true; onFileChanged: debouncedReload(calendarFile); blockLoading: true; printErrors: false
         // NOTE: weekStartDay is owned by CalendarPanel — it is
         // declared here only so layout writes never drop it from the file.
@@ -741,7 +741,7 @@ Singleton {
     // ---- Launcher (Panels > Launcher; bar OS icon + app search popup) ----
     FileView {
         id: launcherFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/launcher.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/launcher.json"
         watchChanges: true; onFileChanged: debouncedReload(launcherFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property int width: 520
@@ -780,7 +780,7 @@ Singleton {
     // ---- Screenshot UI (Panels > Screenshot UI; overlays/ScreenshotUI.qml) --
     FileView {
         id: screenshotFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/screenshot.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/screenshot.json"
         watchChanges: true; onFileChanged: debouncedReload(screenshotFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property string defaultMode: "region"
@@ -839,7 +839,7 @@ Singleton {
     }
     FileView {
         id: barLayoutFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/bar_layout.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/bar_layout.json"
         watchChanges: true; onFileChanged: debouncedReload(barLayoutFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var left: ["workspaces"]
@@ -1098,7 +1098,7 @@ Singleton {
     // and right-click toggling works with zero BarModule changes.
     FileView {
         id: barLabelFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/bar_labels.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/bar_labels.json"
         watchChanges: true; onFileChanged: debouncedReload(barLabelFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var labels: ({})
@@ -1150,7 +1150,7 @@ Singleton {
     // the bar keeps its familiar look until the user turns it off.
     FileView {
         id: barBackgroundFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/bar_backgrounds.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/bar_backgrounds.json"
         watchChanges: true; onFileChanged: debouncedReload(barBackgroundFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var backgrounds: ({})
@@ -1200,7 +1200,7 @@ Singleton {
 
     FileView {
         id: trayFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/tray.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/tray.json"
         watchChanges: true; onFileChanged: debouncedReload(trayFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var pinned: []

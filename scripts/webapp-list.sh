@@ -6,7 +6,7 @@ DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
 find "$DESKTOP_DIR" -maxdepth 3 -name '*.desktop' -print0 2>/dev/null |
 while IFS= read -r -d '' f; do
-    grep -q -E '^Exec=.*(launch-webapp|webapp-handler|webapp-launch|jhqs-webapp|--app=)' "$f" 2>/dev/null || continue
+    grep -q -E '^Exec=.*(launch-webapp|webapp-handler|webapp-launch|solstice-webapp|--app=)' "$f" 2>/dev/null || continue
     base="$(basename "$f" .desktop)"
     dname="$(grep -m1 -E '^Name=' "$f" 2>/dev/null | cut -d= -f2- || true)"
     exec_line="$(grep -m1 -E '^Exec=' "$f" 2>/dev/null | cut -d= -f2- || true)"

@@ -20,7 +20,7 @@ Singleton {
 
     FileView {
         id: volumeFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/volume.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/volume.json"
         watchChanges: true; blockLoading: true; printErrors: false
         onFileChanged: volumeReloadDebounce.restart()
         adapter: JsonAdapter {
@@ -52,7 +52,7 @@ Singleton {
 
     Process {
         id: volProbe
-        command: ["bash", "-c", Quickshell.env("HOME") + "/.config/quickshell/jhqs/scripts/volume.sh get 2>/dev/null | tr -d '\\n'"]
+        command: ["bash", "-c", Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/volume.sh get 2>/dev/null | tr -d '\\n'"]
         stdout: StdioCollector {
             onStreamFinished: {
                 let out = (text || "").trim()

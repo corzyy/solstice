@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""design-snapshots.py — save / restore full visual designs (jhqs).
+"""design-snapshots.py — save / restore full visual designs (solstice).
 
 A "design" is everything that defines the look: wallpaper, theme engine,
 matugen scheme + mode, wallpaper settings, topbar/font styling and the
@@ -12,7 +12,7 @@ Usage:
     design-snapshots.py restore <id>      # restore files, print meta JSON
     design-snapshots.py delete <id>       # delete a snapshot
 
-Snapshots live in ~/.config/quickshell/jhqs/themes/snapshots/<id>/ with a
+Snapshots live in ~/.config/quickshell/solstice/themes/snapshots/<id>/ with a
 meta.json, copies of the design configs and a copy of the wallpaper (so a
 snapshot survives the original file being moved or deleted).
 """
@@ -25,13 +25,13 @@ import subprocess
 import sys
 
 HOME = pathlib.Path.home()
-JHQS = HOME / ".config/quickshell/jhqs"
-THEMES = JHQS / "themes"
-CONFIG = JHQS / "config"
+SOLSTICE = HOME / ".config/quickshell/solstice"
+THEMES = SOLSTICE / "themes"
+CONFIG = SOLSTICE / "config"
 SNAP_BASE = THEMES / "snapshots"
 INDEX = SNAP_BASE / "index.json"
 
-# design state files, relative to JHQS
+# design state files, relative to SOLSTICE
 STATE_FILES = [
     "themes/theme_engine.json",
     "themes/matugen_settings.json",
@@ -127,7 +127,7 @@ def cmd_save() -> int:
     dest = SNAP_BASE / snap_id
     dest.mkdir(parents=True)
     for rel in STATE_FILES:
-        src = JHQS / rel
+        src = SOLSTICE / rel
         if src.is_file():
             (dest / pathlib.Path(rel).name).write_bytes(src.read_bytes())
     wall_copy = ""
@@ -180,7 +180,7 @@ def cmd_restore(snap_id: str) -> int:
     for rel in STATE_FILES:
         src = dest / pathlib.Path(rel).name
         if src.is_file():
-            dst = JHQS / rel
+            dst = SOLSTICE / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             tmp = dst.with_name(dst.name + ".tmp")
             tmp.write_bytes(src.read_bytes())

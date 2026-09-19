@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""theming-apply.py — persistent writers for Application Theming (jhqs).
+"""theming-apply.py — persistent writers for Application Theming (solstice).
 
 Ported from DankMaterialShell's ThemeColorsTab functionality
 (Applications / Cursor / Icon / Matugen Templates / System App Theming),
-adapted to jhqs: matugen runs directly, qt via qt*ct.
+adapted to solstice: matugen runs directly, qt via qt*ct.
 
 Usage: theming-apply.py <domain> <key=value>...
 Domains: icon | cursor | gtk | qt | template | portal | terminals
@@ -16,10 +16,10 @@ import subprocess
 import sys
 
 HOME = pathlib.Path.home()
-JHQS_CFG = HOME / ".config/quickshell/jhqs/config"
-JHQS_SCRIPTS = HOME / ".config/quickshell/jhqs/scripts"
-THEMING_JSON = JHQS_CFG / "theming_settings.json"
-MATUGEN_SETTINGS = HOME / ".config/quickshell/jhqs/themes/matugen_settings.json"
+SOLSTICE_CFG = HOME / ".config/quickshell/solstice/config"
+SOLSTICE_SCRIPTS = HOME / ".config/quickshell/solstice/scripts"
+THEMING_JSON = SOLSTICE_CFG / "theming_settings.json"
+MATUGEN_SETTINGS = HOME / ".config/quickshell/solstice/themes/matugen_settings.json"
 MATUGEN_CONFIG = HOME / ".config/matugen/config.toml"
 GTK3_INI = HOME / ".config/gtk-3.0/settings.ini"
 GTK4_INI = HOME / ".config/gtk-4.0/settings.ini"
@@ -157,7 +157,7 @@ def cursor(pairs: dict) -> None:
 # ------------------------------------------------------------------ gtk ---
 def gtk(pairs: dict) -> None:
     mode = matugen_mode()
-    script = JHQS_SCRIPTS / "apply-gtk.sh"
+    script = SOLSTICE_SCRIPTS / "apply-gtk.sh"
     subprocess.run(["bash", str(script), mode], check=False)
     if theming().get("syncModeWithPortal", True):
         scheme = "prefer-dark" if mode == "dark" else "prefer-light"
@@ -166,7 +166,7 @@ def gtk(pairs: dict) -> None:
 
 # ------------------------------------------------------------------- qt ---
 def qt(pairs: dict) -> None:
-    script = JHQS_SCRIPTS / "apply-qt.sh"
+    script = SOLSTICE_SCRIPTS / "apply-qt.sh"
     subprocess.run(["bash", str(script)], check=False)
 
 
@@ -196,7 +196,7 @@ def terminals(pairs: dict) -> None:
     # light apply here is enough to converge everything.
     if matugen_mode() != "light":
         return
-    wall = sh_out("cat ~/.config/quickshell/jhqs/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n'")
+    wall = sh_out("cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n'")
     if not wall:
         wall = sh_out("cat ~/.cache/swaybg/current 2>/dev/null | tr -d '\\r\\n'")
     if not wall or "\n" in wall:
@@ -204,7 +204,7 @@ def terminals(pairs: dict) -> None:
     mtype = read_json(MATUGEN_SETTINGS).get("type", "scheme-tonal-spot")
     if not re.fullmatch(r"scheme-[a-z-]+", mtype or ""):
         mtype = "scheme-tonal-spot"
-    runner = JHQS_SCRIPTS / "matugen-run.sh"
+    runner = SOLSTICE_SCRIPTS / "matugen-run.sh"
     if runner.exists() and os.access(runner, os.X_OK):
         subprocess.run(["bash", str(runner), "image", wall,
                         "-t", mtype, "-m", "light", "--prefer", "saturation"],
@@ -214,7 +214,7 @@ def terminals(pairs: dict) -> None:
 
 
 # -------------------------------------------------------------- template --
-# jhqs template name -> matugen [templates.*] block ids
+# solstice template name -> matugen [templates.*] block ids
 TEMPLATE_GROUPS = {
     "gtk3": ["gtk3"],
     "gtk4": ["gtk4"],

@@ -97,7 +97,7 @@ Scope {
     readonly property var ccTileIds: ["wifi", "bluetooth", "dnd", "updates"]
     FileView {
         id: ccLayoutFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/controlcenter.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/controlcenter.json"
         watchChanges: true; onFileChanged: ccReloadTimer.restart(); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var blocks: ["tiles", "sliders", "media"]

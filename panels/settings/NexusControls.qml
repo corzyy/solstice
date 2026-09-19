@@ -8,7 +8,7 @@ import "../../ui" as Ui
 
 // NexusControls — 1:1 port of the Caelestia Nexus settings kit
 // (caelestia-dots/shell modules/nexus/common + components/controls) onto the
-// jhqs Theme. Token values are copied verbatim from
+// solstice Theme. Token values are copied verbatim from
 // plugin/src/Caelestia/Config/tokens.hpp:
 //   rounding/spacing/padding: 4 / 8 / 12 / 16 / 20 / 28 / 32 / 48
 //   fontSize: label.small 11, label.medium 12, body.small 13, body.medium 14,

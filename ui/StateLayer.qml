@@ -1,6 +1,6 @@
 // StateLayer — Material-3 hover + press ripple for buttons/rows.
 //
-// Port of caelestia-dots/shell components/StateLayer.qml to jhqs Theme:
+// Port of caelestia-dots/shell components/StateLayer.qml to solstice Theme:
 //  - hover washes the surface at 8% (animated, DefaultEffects)
 //  - press spawns an expanding radial ripple from the press point
 //    (Standard curve, 2x SlowEffects ≈ 600ms, always runs to end)

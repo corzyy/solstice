@@ -9,12 +9,12 @@
 #   fullscreen  all outputs
 #
 # Options (environment, set by the UI from config/screenshot.json):
-#   JHQS_SHOT_DIR       save folder override (~ is expanded; empty = default)
-#   JHQS_SHOT_CURSOR    1 = include the cursor (grim -c)
-#   JHQS_SHOT_CLIPBOARD 0 = don't copy to the clipboard
-#   JHQS_SHOT_NOTIFY    0 = don't post a notification
+#   SOLSTICE_SHOT_DIR       save folder override (~ is expanded; empty = default)
+#   SOLSTICE_SHOT_CURSOR    1 = include the cursor (grim -c)
+#   SOLSTICE_SHOT_CLIPBOARD 0 = don't copy to the clipboard
+#   SOLSTICE_SHOT_NOTIFY    0 = don't post a notification
 #
-# The shot is saved to $JHQS_SHOT_DIR, else $XDG_PICTURES_DIR/Screenshots,
+# The shot is saved to $SOLSTICE_SHOT_DIR, else $XDG_PICTURES_DIR/Screenshots,
 # else ~/Pictures/Screenshots. Exit codes: 0 ok, 3 region cancelled,
 # 2 grim failed, 127 missing dependency. stdout prints the saved path.
 set -u
@@ -22,9 +22,9 @@ set -u
 mode="${1:-fullscreen}"
 geo="${2:-}"
 
-cursor="${JHQS_SHOT_CURSOR:-0}"
-copy="${JHQS_SHOT_CLIPBOARD:-1}"
-toast="${JHQS_SHOT_NOTIFY:-1}"
+cursor="${SOLSTICE_SHOT_CURSOR:-0}"
+copy="${SOLSTICE_SHOT_CLIPBOARD:-1}"
+toast="${SOLSTICE_SHOT_NOTIFY:-1}"
 
 notify() {
     [[ "$toast" == "1" ]] || return 0
@@ -37,7 +37,7 @@ if ! command -v grim >/dev/null 2>&1; then
     exit 127
 fi
 
-dir="${JHQS_SHOT_DIR:-}"
+dir="${SOLSTICE_SHOT_DIR:-}"
 if [[ -z "$dir" ]]; then
     dir="${XDG_PICTURES_DIR:-}"
     if [[ -z "$dir" ]]; then

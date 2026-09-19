@@ -39,14 +39,14 @@ NexusControls.PageBase {
     readonly property string scriptPath: Quickshell.shellDir + "/scripts/umbriel-keybinds.py"
 
     readonly property var shellCatalog: [
-        { id: "launcher", label: "Launcher", subtext: "Open the app launcher", action: "spawn:jhqs module launcher toggle" },
-        { id: "power", label: "Power menu", subtext: "Lock, logout, restart, shut down", action: "spawn:jhqs module power toggle" },
-        { id: "settings", label: "Settings", subtext: "Toggle the settings window", action: "spawn:jhqs module settings toggle" },
-        { id: "screenshot", label: "Screenshot", subtext: "Region, window or fullscreen capture", action: "spawn:jhqs module screenshot toggle" },
-        { id: "lock", label: "Lock screen", subtext: "Lock the session", action: "spawn:jhqs lock" },
-        { id: "calendar", label: "Calendar", subtext: "Toggle the calendar panel", action: "spawn:jhqs module calendar toggle" },
-        { id: "systemtray", label: "System tray", subtext: "Toggle the system tray panel", action: "spawn:jhqs module systemtray toggle" },
-        { id: "reload", label: "Reload shell", subtext: "Restart Quickshell and apply config changes", action: "spawn:jhqs reload" }
+        { id: "launcher", label: "Launcher", subtext: "Open the app launcher", action: "spawn:solstice module launcher toggle" },
+        { id: "power", label: "Power menu", subtext: "Lock, logout, restart, shut down", action: "spawn:solstice module power toggle" },
+        { id: "settings", label: "Settings", subtext: "Toggle the settings window", action: "spawn:solstice module settings toggle" },
+        { id: "screenshot", label: "Screenshot", subtext: "Region, window or fullscreen capture", action: "spawn:solstice module screenshot toggle" },
+        { id: "lock", label: "Lock screen", subtext: "Lock the session", action: "spawn:solstice lock" },
+        { id: "calendar", label: "Calendar", subtext: "Toggle the calendar panel", action: "spawn:solstice module calendar toggle" },
+        { id: "systemtray", label: "System tray", subtext: "Toggle the system tray panel", action: "spawn:solstice module systemtray toggle" },
+        { id: "reload", label: "Reload shell", subtext: "Restart Quickshell and apply config changes", action: "spawn:solstice reload" }
     ]
     // Curated useful Umbriel actions, grouped like the compositor cheatsheet.
     // Actions bound in keybinds-system.toml are edited there, user binds in
@@ -110,7 +110,7 @@ NexusControls.PageBase {
             const action = bind.action
             if (known[action] === true || seen[action] === true) continue
             seen[action] = true
-            if (action.indexOf("spawn:jhqs") === 0
+            if (action.indexOf("spawn:solstice") === 0
                     || root.hiddenActions.indexOf(action) !== -1) continue
             let label = bind.description || ""
             let subtext = action

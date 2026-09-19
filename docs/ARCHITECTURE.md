@@ -1,4 +1,4 @@
-# jhqs — Architecture (layout restructure 2026-09-18)
+# solstice — Architecture (layout restructure 2026-09-18)
 
 ## Guiding principle
 Top-level directories are named after their role, not their origin. `shell.qml` is
@@ -13,11 +13,11 @@ the only file in the root; everything else lives in exactly one zone:
 
 ## File Tree
 ```
-jhqs/
+solstice/
 ├── shell.qml              — the ONLY file in the root (entry point: UseQApplication,
 │                             IconTheme Papirus, activePanel state machine,
 │                             closePanels/toggleExclusive, panel morph driver,
-│                             IpcHandler jhqs)
+│                             IpcHandler solstice)
 │
 ├── bar/                   — top bar (was modules/TopBar + modules/bar)
 │   ├── TopBar.qml         — bar shell: layout slots, delegates
@@ -117,7 +117,7 @@ jhqs/
 │
 ├── assets/                — screenshots and images (screenshot.png)
 ├── scripts/               — shell scripts + python appliers (see scripts/README-less:
-│                             jhqs CLI, update/update-shell, theming-apply,
+│                             solstice CLI, update/update-shell, theming-apply,
 │                             umbriel-apply, settings-apply, volume.sh, …)
 ├── logs/                  — runtime logs (git-ignored): errors.log, startup.log
 └── docs/                  — this file
@@ -176,11 +176,11 @@ Rules learned the hard way:
   names and bar module ids (settings excluded — it is not part of the exclusive state).
 
 ## Settings paths
-All FileView watchers and scripts use `~/.config/quickshell/jhqs/config/<name>.json`
+All FileView watchers and scripts use `~/.config/quickshell/solstice/config/<name>.json`
 plus `config/current_wallpaper.txt` and `config/pin`. Theme-engine data stays in
 `themes/` (matugen writes `themes/matugen.json` per ~/.config/matugen/config.toml),
 snapshots in `themes/snapshots/`.
-Init pattern: `mkdir -p ~/.config/quickshell/jhqs/config; if [ ! -f … ]; then echo
+Init pattern: `mkdir -p ~/.config/quickshell/solstice/config; if [ ! -f … ]; then echo
 default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over existing json.
 
 ## Conventions
@@ -188,13 +188,13 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   `Panels.X { showX }`.
 - Colors/radius/anim → only `Theme.*` (never hex literal, no raw `Easing.*`).
 - Persistence → FileView + JsonAdapter + `writeAdapter()` + clamp.
-- IPC → `quickshell ipc -c jhqs call <target> <func>` (or `jhqs` CLI).
+- IPC → `quickshell ipc -c solstice call <target> <func>` (or `solstice` CLI).
 - DP-1 exclusiveZone only TopBar; others `Theme.isPrimaryScreen(modelData)`.
 - Every panel body: `Flickable { clip: true; boundsBehavior: StopAtBounds;
   contentHeight: col.implicitHeight }`.
 
 ## History
-- 2026-09-01/02: ControlCenter/CalendarPanel/JhqsMenu split into sections; dead
+- 2026-09-01/02: ControlCenter/CalendarPanel/SolsticeMenu split into sections; dead
   network/airplane polling, misc/ wrappers, SearchField/StyledPanel removed.
 - 2026-09-10: ControlCenter + MediaPanel/MediaService removed; plugins manifest
   removed; merges: categories 5→MenuCategories, calendar 3→inline in CalendarPanel,
@@ -218,7 +218,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   `bar/widgets/WeatherWidget.qml`, `panels/settings/pages/WeatherPage.qml`,
   `services/WeatherService.qml` + `WeatherModel.js` (+ qmldir), settings nav/page,
   IPC (`toggle/show/hideWeather`), panel enum/morph maps, Theme layout defaults
-  and migration, `config/weather.json`, `scripts/jhqs` module case, and the
+  and migration, `config/weather.json`, `scripts/solstice` module case, and the
   Umbriel layer-rule namespace; PanelSpring's unused `offset` shim and
   TogglePill's `offBgAlpha` knob (only the weather pill used them) were dropped.
 - 2026-09-18 (later): bar modules Network, Bluetooth, Volume, Updates and Vitals
@@ -228,7 +228,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   UpdateCenterPanel stay as CC drill-ins), BarModule cases/components,
   DraggableModule signals, TopBar signals/flags/handlers, shell panel
   enum/loaders/IPC/morph maps, Theme module ids/meta/layout defaults, the
-  `scripts/jhqs` module cases, and stale `config/bar_layout.json` ids.
+  `scripts/solstice` module cases, and stale `config/bar_layout.json` ids.
   Services stay: the Control Center and the Settings pages use them.
 - 2026-09-18 (later): bar drag-to-reorder removed — TopBar drag state/functions,
   drop markers + drag-ghost overlay, `BarDropModel.js` and the DraggableModule
@@ -310,8 +310,8 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   Theme.barCardExtent (bar thickness − 4) instead of the module content, and
   workspaces no longer paints its own content-sized pill — every background
   goes through BarSlot's card, so all taskbar backgrounds are the same size.
-- 2026-09-19 (later): JhqsMenu launcher removed end to end — `panels/menu/`
-  (JhqsMenu shell, MenuCategories, views) deleted; ThemeEngine moved to
+- 2026-09-19 (later): SolsticeMenu launcher removed end to end — `panels/menu/`
+  (SolsticeMenu shell, MenuCategories, views) deleted; ThemeEngine moved to
   `panels/settings/` (its only remaining consumer) and the theme-option list
   inlined into WallpaperStylesPage. Bar launcher module and the menu's
   session/power entry points removed (TopBar/BarSlot/BarModule/
@@ -319,7 +319,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   ids/meta/layout defaults + migration, TopBarPage component, stale
   `config/bar_layout.json`/`bar_backgrounds.json` ids), shell.qml panel
   enum/loader/IPC state (menu/centered/systemTrigger/openSystem) dropped and
-  `scripts/jhqs` lost its launcher/system modules. Setup page's config-file
+  `scripts/solstice` lost its launcher/system modules. Setup page's config-file
   shortcuts (Monitors/Keybindings/Autostart/Terminal/Fish) removed too.
    Launcher-only leftovers followed: Settings → Search page + its
    `search*` toggles in SettingsService/settings.json, and Theme's
@@ -361,8 +361,8 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    set via the Search section's TextFieldRow) persisted in
    `config/launcher.json` (Theme.launcherWidth/Height/MaxResults/
    ShowDescriptions/MenuPrefix), bar layout v2 migration puts the icon first in the left
-   zone. `scripts/jhqs` gained the `launcher` module so the existing
-   `Mod+Space = spawn:jhqs module launcher toggle` keybind opens it centred.
+   zone. `scripts/solstice` gained the `launcher` module so the existing
+   `Mod+Space = spawn:solstice module launcher toggle` keybind opens it centred.
    The OS icon is deliberately not listed in Taskbar → Components.
 - 2026-09-19 (later): Settings app decoupled from the exclusive panel state so
    it can stay open together with launcher/control center/drill-ins:
@@ -371,7 +371,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    bar popouts (`onDismissed`, the `hide*` IPC and `hideLauncher` use it), while
    `hideSettings()`/`toggleSettings()`/`openSettings()` drive the window alone
    (`openSettings` from the CC keeps the CC open). `panelForName`/`panelForModule`
-   no longer map settings — `scripts/jhqs module settings close` closes just the
+   no longer map settings — `scripts/solstice module settings close` closes just the
    window. The bar is not affected by the settings window.
 - 2026-09-19 (later): Power menu added as a standalone Android-style modal
    (`panels/PowerPanel.qml`), deliberately NOT a CC drill-in (no morph, no
@@ -386,7 +386,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    swaps to the matugen accent (primary/onAccent; Shutdown pins the always-red
    error/on_error pair).    Opened from the CC header power
    button (`ControlCenterPanel.powerRequested` → `toggleExclusive`), the
-   `jhqs` CLI (`scripts/jhqs` gained the `power` module: `jhqs module power
+   `solstice` CLI (`scripts/solstice` gained the `power` module: `solstice module power
    toggle`, bound to SUPER+ESCAPE in
    ~/.config/umbriel/configs/keybinds-user.toml) and the raw
    `togglePower/showPower/hidePower` IPC; enum slot 9, `panelForName.power`;
@@ -450,7 +450,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   sliding accent indicator and a springy overshoot open run. No shutter
   button: clicking a segment starts that capture (Enter/Space runs the
   current mode, Left/Right cycle it, Escape/close/toggle dismiss). Opened by
-  PRINT (`jhqs module screenshot toggle` in keybinds-user.toml), which
+  PRINT (`solstice module screenshot toggle` in keybinds-user.toml), which
   closes the bar popouts first; opening a panel or locking hides it. Capture
   unmaps the pill, then `scripts/screenshot.sh` runs slurp (region; the
   drag release captures, a cancelled selection reopens the pill). slurp is
@@ -468,7 +468,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   hovered program indicator is a pill the picker draws over the bar
   (z-above it) on the screen that owns the window; releasing the mouse over
   a window captures it, Escape/right click cancels. Saves to `~/Pictures/Screenshots`, copies to
-  the clipboard and notifies. IPC: `jhqs toggleScreenshot/showScreenshot/
+  the clipboard and notifies. IPC: `solstice toggleScreenshot/showScreenshot/
   hideScreenshot` + target `screenshot` (mode/capture/pickAt/status).
 - 2026-09-19 (later): Screenshot UI settings page added (Settings > Panels >
    Screenshot UI, `panels/settings/pages/ScreenshotSettings.qml`, registered
@@ -478,7 +478,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    expanded by the script). Persisted in `config/screenshot.json` via
    `Theme.screenshot*` (FileView + JsonAdapter); `ScreenshotUI` passes them
    to `scripts/screenshot.sh` through `Process.environment`
-   (`JHQS_SHOT_DIR/CURSOR/CLIPBOARD/NOTIFY`).
+   (`SOLSTICE_SHOT_DIR/CURSOR/CLIPBOARD/NOTIFY`).
 - 2026-09-19 (later): Setup gains "Language & Region" under Date & Time
    (panels/settings/pages/LanguageRegionPage.qml): system language and
    location via `localectl set-locale` (LANG + LC_TIME/LC_NUMERIC/
@@ -504,10 +504,10 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    install").
 - 2026-09-19 (later): Setup gained a Shell section with a Keybinds page
    (`panels/settings/pages/KeybindsPage.qml`, sub-view `"keybinds"` in
-   `SetupPage.qml`). The page lists the full catalog of bindable jhqs actions
+   `SetupPage.qml`). The page lists the full catalog of bindable solstice actions
    (launcher, power menu, settings, screenshot, lock, calendar, system tray,
-   reload) — the action strings are the `spawn:jhqs …` commands from
-   `scripts/jhqs`, so "all possible keybindings" means every shell capability,
+   reload) — the action strings are the `spawn:solstice …` commands from
+   `scripts/solstice`, so "all possible keybindings" means every shell capability,
    bound or not, rather than only the currently-bound chords. Each row shows the effective
    Umbriel chord (or "Not bound") and rebinds by click: capture mode enables a
    `ShortcutInhibitor` on the settings `FloatingWindow` (passed down as
@@ -525,7 +525,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    `~/.config/umbriel/configs/keybinds-user.toml` by default, or the file the
    bind currently comes from (see the Compositor entry below). Comments and
    table-form options survive; a chord owned by another bind is disabled with
-   a `# jhqs-off:` prefix, which `set` reuses/uncomments; an
+   a `# solstice-off:` prefix, which `set` reuses/uncomments; an
    action bound in another include is reported via `stale`, a same-chord bind
    in an earlier file via `overrides`, and in a later file via `shadowedBy`;
    the script then runs `umbriel msg config-reload`. Editing the hand-written
@@ -541,7 +541,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    brightness / playerctl), Session (config-reload, cheatsheet, session-quit).
    Everything else in the two keybind files lands in a trailing "Other binds"
    group (help description as label, raw action as subtext, spawn commands
-   shortened, `spawn:jhqs …` excluded — those are Shell page rows — and a
+   shortened, `spawn:solstice …` excluded — those are Shell page rows — and a
    `hiddenActions` list for actions deliberately kept off the page, currently
    `spawn:opencode`; hidden binds stay active in the config), so no other bind
    is unreachable from the UI. Rows are keyed by raw action, so parameterized
@@ -599,7 +599,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
 
 ## Verification
 ```
-timeout 5 quickshell -p ~/.config/quickshell/jhqs/shell.qml --verbose 2>&1 | head -80  # expect "Configuration Loaded", no ERROR
-quickshell ipc -c jhqs call jhqs state
-quickshell ipc -c jhqs call updates status
+timeout 5 quickshell -p ~/.config/quickshell/solstice/shell.qml --verbose 2>&1 | head -80  # expect "Configuration Loaded", no ERROR
+quickshell ipc -c solstice call solstice state
+quickshell ipc -c solstice call updates status
 ```

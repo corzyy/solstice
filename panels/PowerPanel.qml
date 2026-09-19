@@ -14,7 +14,7 @@ import "../ui"
 // center drill-in). The backdrop is dimmed by a scrim and blurred by the
 // compositor (layer rule for the "powerpanel" namespace); the action card
 // sits centred on screen. Opened from the control center power button or
-// the `jhqs` IPC (togglePower/showPower), closed by the backdrop, Escape,
+// the `solstice` IPC (togglePower/showPower), closed by the backdrop, Escape,
 // a session action or the IPC.
 Scope {
     id: scope

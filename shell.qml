@@ -38,12 +38,12 @@ ShellRoot {
         onTriggered: {
             if (wallpaperGuardProc.running) return
             let cmd = "pgrep -x swaybg >/dev/null 2>&1 && exit 0;"
-            cmd += " WALL=\"$(cat ~/.config/quickshell/jhqs/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
+            cmd += " WALL=\"$(cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/swaybg/current 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/awww/current 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " if [ ! -f \"$WALL\" ]; then for d in \"$HOME/Bilder/wallpapers\" \"$HOME/Pictures/wallpapers\" \"$HOME/Wallpapers\" \"${XDG_PICTURES_DIR:-$HOME/Pictures}/wallpapers\" \"$HOME/wallpapers\"; do if [ -d \"$d\" ]; then WALL=\"$(find \"$d\" -mindepth 1 -maxdepth 2 -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' -o -iname '*.bmp' -o -iname '*.gif' -o -iname '*.tiff' \\) 2>/dev/null | sort | head -1)\"; [ -f \"$WALL\" ] && break; fi; done; fi;"
             cmd += " [ -f \"$WALL\" ] || exit 0;"
-            cmd += " MODE=$(jq -r '.mode // \"fill\"' \"$HOME/.config/quickshell/jhqs/config/wallpaper_settings.json\" 2>/dev/null); case \"$MODE\" in stretch|fit|fill|center|tile) ;; *) MODE=fill;; esac;"
+            cmd += " MODE=$(jq -r '.mode // \"fill\"' \"$HOME/.config/quickshell/solstice/config/wallpaper_settings.json\" 2>/dev/null); case \"$MODE\" in stretch|fit|fill|center|tile) ;; *) MODE=fill;; esac;"
             cmd += " setsid nohup swaybg -i \"$WALL\" -m \"$MODE\" >/dev/null 2>&1 < /dev/null & disown; echo restored"
             wallpaperGuardProc.command = ["bash", "-c", cmd]
             wallpaperGuardProc.running = true
@@ -442,7 +442,7 @@ ShellRoot {
     }
 
     IpcHandler {
-        target: "jhqs"
+        target: "solstice"
         function state(): string {
             return "calendar=" + root.calendarVisible
             + " settings=" + root.settingsVisible

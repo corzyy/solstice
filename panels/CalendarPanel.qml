@@ -1023,7 +1023,7 @@ Scope {
 
     FileView {
         id: calendarSettingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/jhqs/config/calendar.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/calendar.json"
         watchChanges: true
         onFileChanged: reload()
         blockLoading: true
@@ -1043,7 +1043,7 @@ Scope {
         repeat: false
         onTriggered: {
             if (!calendarSettingsInitProc.running) {
-                calendarSettingsInitProc.command = ["bash", "-c", "mkdir -p ~/.config/quickshell/jhqs; if [ ! -f ~/.config/quickshell/jhqs/config/calendar.json ]; then echo '{\"weekStartDay\":\"sunday\"}' > ~/.config/quickshell/jhqs/config/calendar.json; fi; echo done"]
+                calendarSettingsInitProc.command = ["bash", "-c", "mkdir -p ~/.config/quickshell/solstice; if [ ! -f ~/.config/quickshell/solstice/config/calendar.json ]; then echo '{\"weekStartDay\":\"sunday\"}' > ~/.config/quickshell/solstice/config/calendar.json; fi; echo done"]
                 calendarSettingsInitProc.running = true
             }
         }

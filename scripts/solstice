@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# jhqs — command-line control for the jhqs quickshell.
+# solstice — command-line control for the solstice quickshell.
 set -u
 
-QS_BIN="${JHQS_QS:-}"
+QS_BIN="${SOLSTICE_QS:-}"
 if [[ -z "$QS_BIN" ]]; then
     if command -v quickshell >/dev/null 2>&1; then
         QS_BIN=quickshell
     elif command -v qs >/dev/null 2>&1; then
         QS_BIN=qs
     else
-        echo "jhqs: quickshell binary not found (set JHQS_QS)" >&2
+        echo "solstice: quickshell binary not found (set SOLSTICE_QS)" >&2
         exit 127
     fi
 fi
-INSTANCE="${JHQS_INSTANCE:-jhqs}"
+INSTANCE="${SOLSTICE_INSTANCE:-solstice}"
 
-# Repo root (resolves the ~/.local/bin/jhqs symlink) — used for logs/.
+# Repo root (resolves the ~/.local/bin/solstice symlink) — used for logs/.
 SRC="${BASH_SOURCE[0]}"
 while [[ -L "$SRC" ]]; do
     link="$(readlink "$SRC")"
@@ -24,10 +24,14 @@ while [[ -L "$SRC" ]]; do
         *)  SRC="$(dirname "$SRC")/$link" ;;
     esac
 done
-JHQS_ROOT="$(cd "$(dirname "$SRC")/.." && pwd)"
-LOG_DIR="$JHQS_ROOT/logs"
+SOLSTICE_ROOT="$(cd "$(dirname "$SRC")/.." && pwd)"
+LOG_DIR="$SOLSTICE_ROOT/logs"
 ERROR_LOG="$LOG_DIR/errors.log"
 STARTUP_LOG="$LOG_DIR/startup.log"
+
+PANELS="calendar systemtray settings launcher power screenshot"
+ACTIONS="toggle open close"
+SECTIONS="wallpaper network bluetooth audio global umbriel panels apps about setup"
 
 ensure_logs() { mkdir -p "$LOG_DIR"; }
 
@@ -46,122 +50,240 @@ is_running() {
     "$QS_BIN" list -c "$INSTANCE" 2>/dev/null | grep -q "Process ID"
 }
 
+panel_description() {
+    case "$1" in
+        calendar)   echo "Calendar popout" ;;
+        systemtray) echo "System tray" ;;
+        settings)   echo "Settings window ('open' takes a section)" ;;
+        launcher)   echo "App launcher (opens centred under the bar)" ;;
+        power)      echo "Power menu" ;;
+        screenshot) echo "Screenshot region / window / fullscreen pill" ;;
+    esac
+}
+
+lifecycle_description() {
+    case "$1" in
+        start)  echo "Start the shell in the background. Does nothing if it is already running." ;;
+        stop)   echo "Stop the running shell." ;;
+        reload) echo "Reload the shell config. Starts the shell if it is not running." ;;
+        state)  echo "Print the open/closed state of every panel." ;;
+        lock)   echo "Lock the session. Falls back to loginctl when the shell is not running." ;;
+    esac
+}
+
 module_call() {
-    local module="$1" action="$2" extra="${3:-}"
+    local module="$1" action="${2:-toggle}" extra="${3:-}"
+
+    case " $PANELS " in
+        *" $module "*) ;;
+        *)  echo "solstice: unknown panel '$module'" >&2
+            echo "Valid panels: $PANELS" >&2
+            echo "Run 'solstice panels' for a description of each." >&2
+            exit 2 ;;
+    esac
+
+    case " $ACTIONS " in
+        *" $action "*) ;;
+        *)  echo "solstice: unknown action '$action' for panel '$module'" >&2
+            echo "Valid actions: $ACTIONS" >&2
+            echo "Run 'solstice help module' for help." >&2
+            exit 2 ;;
+    esac
+
     case "$module" in
         calendar)
             case "$action" in
-                toggle) call jhqs toggleCalendar ;;
-                open)   call jhqs showCalendar ;;
-                close)  call jhqs hideCalendar ;;
+                toggle) call solstice toggleCalendar ;;
+                open)   call solstice showCalendar ;;
+                close)  call solstice hideCalendar ;;
             esac ;;
         systemtray)
             case "$action" in
-                toggle) call jhqs toggleSystemTray ;;
-                open)   call jhqs showSystemTray ;;
-                close)  call jhqs hideSystemTray ;;
+                toggle) call solstice toggleSystemTray ;;
+                open)   call solstice showSystemTray ;;
+                close)  call solstice hideSystemTray ;;
             esac ;;
         settings)
             case "$action" in
-                toggle) call jhqs toggleSettings ;;
-                open)   call jhqs showSettings "${extra:-global}" ;;
-                close)  call jhqs hideSettings ;;
+                toggle) call solstice toggleSettings ;;
+                open)   call solstice showSettings "${extra:-global}" ;;
+                close)  call solstice hideSettings ;;
             esac ;;
         launcher)
             # true = centred under the bar (SUPER+SPACE); the bar icon opens
             # the panel anchored to itself via the shell's own click path.
             case "$action" in
-                toggle) call jhqs toggleLauncher true ;;
-                open)   call jhqs showLauncher true ;;
-                close)  call jhqs hideLauncher ;;
+                toggle) call solstice toggleLauncher true ;;
+                open)   call solstice showLauncher true ;;
+                close)  call solstice hideLauncher ;;
             esac ;;
         power)
             # Android-style power menu (SUPER+ESCAPE).
             case "$action" in
-                toggle) call jhqs togglePower ;;
-                open)   call jhqs showPower ;;
-                close)  call jhqs hidePower ;;
+                toggle) call solstice togglePower ;;
+                open)   call solstice showPower ;;
+                close)  call solstice hidePower ;;
             esac ;;
         screenshot)
             # Bottom pill for region / window / fullscreen capture (PRINT).
             case "$action" in
-                toggle) call jhqs toggleScreenshot ;;
-                open)   call jhqs showScreenshot ;;
-                close)  call jhqs hideScreenshot ;;
+                toggle) call solstice toggleScreenshot ;;
+                open)   call solstice showScreenshot ;;
+                close)  call solstice hideScreenshot ;;
             esac ;;
-        *)
-            echo "jhqs: unknown module '$module'" >&2
-            echo "modules: $MODULES" >&2
-            exit 2 ;;
     esac
 }
 
-MODULES="calendar systemtray settings launcher power screenshot"
-
 usage() {
     cat <<EOF
-jhqs — control the jhqs quickshell from the terminal or a keybind.
+solstice — control the Solstice quickshell from the terminal.
 
-Usage: jhqs <command> [args...]
+Usage
+  solstice <command> [arguments]
 
-Lifecycle:
-  start                       Start the shell (daemonized)
-  stop                        Stop the shell
-  reload                      Reload the shell config (starts it if stopped)
-  state                       Print open/closed state of every panel
-  lock                        Show the lockscreen
+Shell
+  start                         Start the shell in the background
+  stop                          Stop the shell
+  reload                        Reload the config (starts it if stopped)
+  state                         Show which panels are currently open
+  lock                          Lock the session / show the lockscreen
 
-Panels:
-  module <name> <action>      action: toggle | open | close
-  module settings open <section>   sections: wallpaper network bluetooth audio
-                                   global umbriel panels apps
-                                   about setup
-  Modules: $MODULES
+Panels
+  module <panel> <action>       Open, close or toggle a panel
+                                  panels:  $PANELS
+                                  actions: $ACTIONS  (default: toggle)
+  panels                        List the panels and what they do
 
-Logs:
-  log [N]                   Print last N error-log lines (default 50)
-  log -f [N]                Follow the error log (logs/errors.log)
-  Startup output goes to logs/startup.log; runtime errors to logs/errors.log.
+Logs
+  log [n]                       Show the last n lines of errors.log (default 50)
+  log -f [n]                    Follow the error log live
 
-Raw:
-  call <target> <func> [args...]      Direct IPC call
-  targets                             List IPC targets and functions
-  help | -h | --help                  This help
+Advanced
+  call <target> <function> [args]   Send a raw IPC call
+  targets                           List every IPC target and function
 
-Environment:
-  JHQS_QS         quickshell binary (default: quickshell, else qs)
-  JHQS_INSTANCE   IPC instance name (default: jhqs)
+Help
+  help [command]                Show this help, or help for one command
+
+Environment
+  SOLSTICE_QS                   quickshell binary (default: quickshell, else qs)
+  SOLSTICE_INSTANCE             IPC instance name (default: solstice)
+
+Examples
+  solstice module settings open audio
+  solstice module launcher toggle
+  solstice log -f
+  solstice help module
 EOF
+}
+
+help_topic() {
+    case "${1:-}" in
+        ""|help|all) usage ;;
+        start|stop|reload|state|lock)
+            printf 'solstice %s — shell lifecycle.\n\n' "$1"
+            printf 'Usage\n  solstice %s\n\n' "$1"
+            printf '%s\n' "$(lifecycle_description "$1")"
+            ;;
+        module)
+            cat <<EOF
+solstice module — open, close or toggle a panel.
+
+Usage
+  solstice module <panel> [action]
+
+Arguments
+  panel    one of: $PANELS
+  action   $ACTIONS  (default: toggle)
+
+Settings sections for 'solstice module settings open <section>'
+  $SECTIONS
+
+Examples
+  solstice module launcher toggle
+  solstice module settings open audio
+  solstice module calendar close
+
+Run 'solstice panels' for a description of each panel.
+EOF
+            ;;
+        panels)
+            printf 'Panels controllable with "solstice module <panel> <action>":\n\n'
+            for p in $PANELS; do
+                printf '  %-12s %s\n' "$p" "$(panel_description "$p")"
+            done
+            printf '\nActions: %s   (toggle is the default)\n' "$ACTIONS"
+            ;;
+        log)
+            cat <<EOF
+solstice log — read the shell's error log.
+
+Usage
+  solstice log [n]        Show the last n lines (default 50)
+  solstice log -f [n]     Follow the log live
+
+Files
+  $ERROR_LOG
+      Runtime errors and warnings.
+  $STARTUP_LOG
+      Output from the most recent 'solstice start'.
+EOF
+            ;;
+        call)
+            cat <<EOF
+solstice call — send a raw IPC call to the shell.
+
+Usage
+  solstice call <target> <function> [arguments]
+
+Use 'solstice targets' to list every target and its functions.
+Example
+  solstice call dnd toggle
+EOF
+            ;;
+        targets)
+            printf 'solstice targets — list every IPC target and its functions.\n\nUsage\n  solstice targets\n'
+            ;;
+        *)
+            echo "solstice: no help for '$1'" >&2
+            echo "Run 'solstice help' to see all commands." >&2
+            exit 2 ;;
+    esac
 }
 
 cmd="${1:-help}"
 shift || true
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    help_topic "$cmd"
+    exit 0
+fi
+
 case "$cmd" in
     start)
         if is_running; then
-            echo "jhqs: already running"
+            echo "solstice: already running"
         else
             boot_shell
-            echo "jhqs: started"
+            echo "solstice: started"
         fi ;;
     stop)
         if is_running; then
             "$QS_BIN" kill -c "$INSTANCE" >/dev/null 2>&1
-            echo "jhqs: stopped"
+            echo "solstice: stopped"
         else
-            echo "jhqs: not running"
+            echo "solstice: not running"
         fi ;;
     reload)
         if is_running; then
-            call jhqs reload
+            call solstice reload
         else
             boot_shell
-            echo "jhqs: started"
+            echo "solstice: started"
         fi ;;
     log)
         if [[ ! -f "$ERROR_LOG" ]]; then
-            echo "jhqs: no error log yet ($ERROR_LOG)" >&2
+            echo "solstice: no error log yet ($ERROR_LOG)" >&2
             exit 1
         fi
         if [[ "${1:-}" == "-f" || "${1:-}" == "--follow" ]]; then
@@ -171,23 +293,27 @@ case "$cmd" in
             tail -n "${1:-50}" "$ERROR_LOG"
         fi ;;
     state)
-        if is_running; then call jhqs state; else echo "jhqs: not running"; fi ;;
+        if is_running; then call solstice state; else echo "solstice: not running"; fi ;;
     lock)
         if is_running; then
             call lockscreen lock
         else
-            loginctl lock-session >/dev/null 2>&1 || echo "jhqs: not running" >&2
+            loginctl lock-session >/dev/null 2>&1 || echo "solstice: not running" >&2
         fi ;;
 
     module)
-        [[ $# -ge 1 ]] || { echo "jhqs: module <name> <toggle|open|close>" >&2; exit 2; }
+        if [[ $# -lt 1 ]]; then
+            help_topic module >&2
+            exit 2
+        fi
         module_call "$1" "${2:-toggle}" "${3:-}" ;;
 
+    panels)  help_topic panels ;;
     call)    call "$@" ;;
     targets) "$QS_BIN" ipc -c "$INSTANCE" show 2>&1 ;;
-    help|-h|--help|"") usage ;;
+    help|-h|--help) help_topic "${1:-}" ;;
     *)
-        echo "jhqs: unknown command '$cmd'" >&2
-        echo "Run 'jhqs help'." >&2
+        echo "solstice: unknown command '$cmd'" >&2
+        echo "Run 'solstice help' to see all commands." >&2
         exit 2 ;;
 esac

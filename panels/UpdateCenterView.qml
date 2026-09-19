@@ -24,7 +24,7 @@ Column {
     width: parent ? parent.width : 410
     spacing: 12
 
-    property string completionPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/jhqs-update-center-complete"
+    property string completionPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/solstice-update-center-complete"
     property string completionMarker: ""
 
     readonly property var updates: UpdateService.updates
@@ -35,7 +35,7 @@ Column {
         ? "Last check: " + lastChecked.toLocaleString(I18n.formatLocale,
             I18n.location === "DE" ? "ddd, d. MMM · HH:mm" : "ddd, d MMM · HH:mm")
         : "Not checked yet"
-    readonly property string updateScript: Quickshell.env("HOME") + "/.config/quickshell/jhqs/scripts/update.sh"
+    readonly property string updateScript: Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/update.sh"
     property bool listExpanded: false
     property var selectedKeys: ({})
 
@@ -94,7 +94,7 @@ Column {
         let full = command
         if (markDone) full += " && date +%s%N > " + shellQuote(completionPath) + " && printf '\\nUpdate OK.\\n'"
         if (hold) full += '; echo; read -n1 -s -r -p "Press any key to close…"'
-        termProc.command = ["bash", "-c", "kitty --class jhqs-update --title Update bash -lc " + shellQuote(full) + " &"]
+        termProc.command = ["bash", "-c", "kitty --class solstice-update --title Update bash -lc " + shellQuote(full) + " &"]
         termProc.running = true
     }
     function launch(targets: var): void { runInTerminal(updateCommand(targets), true, true) }

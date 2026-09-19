@@ -414,7 +414,7 @@ Singleton {
     // ---- Pin for auto-reconnect (shared pin store) ----
     PersistentProperties {
         id: autoReconnectPins
-        reloadableId: "jhqs.bluetooth-autoreconnect"
+        reloadableId: "solstice.bluetooth-autoreconnect"
         property var devices: []
     }
     readonly property var pinnedAddresses: autoReconnectPins.devices || []
