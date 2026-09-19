@@ -1,0 +1,6 @@
+{
+  "transitionDuration": 1,
+  "transitionFps": 120,
+  "transitionType": "grow",
+  "mode": "fill"
+}

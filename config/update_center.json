@@ -1,0 +1,4 @@
+{
+  "checkSchedule": "At startup only",
+  "offerShutdownAction": true
+}

@@ -1,0 +1,8 @@
+# Runtime artifacts of the log system (services/LogService.qml) —
+# never commit actual logs, only the folder itself.
+*.log
+*.log.1
+.errors.lock
+.errors.pid
+!.gitignore
+!.gitkeep

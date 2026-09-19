@@ -1,0 +1,21 @@
+{
+    "center": [
+        "activewindow"
+    ],
+    "fourfifths": [
+    ],
+    "hidden": [
+    ],
+    "left": [
+        "launcher",
+        "workspaces"
+    ],
+    "right": [
+        "systemtray",
+        "controlcenter",
+        "clock"
+    ],
+    "twofifths": [
+    ],
+    "version": 2
+}

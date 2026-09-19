@@ -1,0 +1,45 @@
+{
+    "blocks": [
+        "sliders",
+        "tiles",
+        "media"
+    ],
+    "hiddenTiles": [
+    ],
+    "tileCols": {
+        "bluetooth": 2,
+        "dnd": 2,
+        "updates": 2,
+        "wifi": 2
+    },
+    "tilePos": {
+        "bluetooth": [
+            2,
+            0
+        ],
+        "dnd": [
+            2,
+            1
+        ],
+        "updates": [
+            0,
+            1
+        ],
+        "wifi": [
+            0,
+            0
+        ]
+    },
+    "tileRows": {
+        "bluetooth": 1,
+        "dnd": 1,
+        "updates": 1,
+        "wifi": 1
+    },
+    "tiles": [
+        "bluetooth",
+        "dnd",
+        "updates",
+        "wifi"
+    ]
+}

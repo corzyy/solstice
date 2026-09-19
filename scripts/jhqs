@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# jhqs — command-line control for the jhqs quickshell.
+set -u
+
+QS_BIN="${JHQS_QS:-}"
+if [[ -z "$QS_BIN" ]]; then
+    if command -v quickshell >/dev/null 2>&1; then
+        QS_BIN=quickshell
+    elif command -v qs >/dev/null 2>&1; then
+        QS_BIN=qs
+    else
+        echo "jhqs: quickshell binary not found (set JHQS_QS)" >&2
+        exit 127
+    fi
+fi
+INSTANCE="${JHQS_INSTANCE:-jhqs}"
+
+# Repo root (resolves the ~/.local/bin/jhqs symlink) — used for logs/.
+SRC="${BASH_SOURCE[0]}"
+while [[ -L "$SRC" ]]; do
+    link="$(readlink "$SRC")"
+    case "$link" in
+        /*) SRC="$link" ;;
+        *)  SRC="$(dirname "$SRC")/$link" ;;
+    esac
+done
+JHQS_ROOT="$(cd "$(dirname "$SRC")/.." && pwd)"
+LOG_DIR="$JHQS_ROOT/logs"
+ERROR_LOG="$LOG_DIR/errors.log"
+STARTUP_LOG="$LOG_DIR/startup.log"
+
+ensure_logs() { mkdir -p "$LOG_DIR"; }
+
+boot_shell() {
+    ensure_logs
+    "$QS_BIN" --no-color -d -c "$INSTANCE" >>"$STARTUP_LOG" 2>&1
+}
+
+call() {
+    local target="$1" func="$2"
+    shift 2
+    "$QS_BIN" ipc -c "$INSTANCE" call "$target" "$func" "$@" 2>&1
+}
+
+is_running() {
+    "$QS_BIN" list -c "$INSTANCE" 2>/dev/null | grep -q "Process ID"
+}
+
+module_call() {
+    local module="$1" action="$2" extra="${3:-}"
+    case "$module" in
+        calendar)
+            case "$action" in
+                toggle) call jhqs toggleCalendar ;;
+                open)   call jhqs showCalendar ;;
+                close)  call jhqs hideCalendar ;;
+            esac ;;
+        systemtray)
+            case "$action" in
+                toggle) call jhqs toggleSystemTray ;;
+                open)   call jhqs showSystemTray ;;
+                close)  call jhqs hideSystemTray ;;
+            esac ;;
+        settings)
+            case "$action" in
+                toggle) call jhqs toggleSettings ;;
+                open)   call jhqs showSettings "${extra:-global}" ;;
+                close)  call jhqs hideSettings ;;
+            esac ;;
+        launcher)
+            # true = centred under the bar (SUPER+SPACE); the bar icon opens
+            # the panel anchored to itself via the shell's own click path.
+            case "$action" in
+                toggle) call jhqs toggleLauncher true ;;
+                open)   call jhqs showLauncher true ;;
+                close)  call jhqs hideLauncher ;;
+            esac ;;
+        power)
+            # Android-style power menu (SUPER+ESCAPE).
+            case "$action" in
+                toggle) call jhqs togglePower ;;
+                open)   call jhqs showPower ;;
+                close)  call jhqs hidePower ;;
+            esac ;;
+        screenshot)
+            # Bottom pill for region / window / fullscreen capture (PRINT).
+            case "$action" in
+                toggle) call jhqs toggleScreenshot ;;
+                open)   call jhqs showScreenshot ;;
+                close)  call jhqs hideScreenshot ;;
+            esac ;;
+        *)
+            echo "jhqs: unknown module '$module'" >&2
+            echo "modules: $MODULES" >&2
+            exit 2 ;;
+    esac
+}
+
+MODULES="calendar systemtray settings launcher power screenshot"
+
+usage() {
+    cat <<EOF
+jhqs — control the jhqs quickshell from the terminal or a keybind.
+
+Usage: jhqs <command> [args...]
+
+Lifecycle:
+  start                       Start the shell (daemonized)
+  stop                        Stop the shell
+  reload                      Reload the shell config (starts it if stopped)
+  state                       Print open/closed state of every panel
+  lock                        Show the lockscreen
+
+Panels:
+  module <name> <action>      action: toggle | open | close
+  module settings open <section>   sections: wallpaper network bluetooth audio
+                                   global umbriel panels apps
+                                   about setup
+  Modules: $MODULES
+
+Logs:
+  log [N]                   Print last N error-log lines (default 50)
+  log -f [N]                Follow the error log (logs/errors.log)
+  Startup output goes to logs/startup.log; runtime errors to logs/errors.log.
+
+Raw:
+  call <target> <func> [args...]      Direct IPC call
+  targets                             List IPC targets and functions
+  help | -h | --help                  This help
+
+Environment:
+  JHQS_QS         quickshell binary (default: quickshell, else qs)
+  JHQS_INSTANCE   IPC instance name (default: jhqs)
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    start)
+        if is_running; then
+            echo "jhqs: already running"
+        else
+            boot_shell
+            echo "jhqs: started"
+        fi ;;
+    stop)
+        if is_running; then
+            "$QS_BIN" kill -c "$INSTANCE" >/dev/null 2>&1
+            echo "jhqs: stopped"
+        else
+            echo "jhqs: not running"
+        fi ;;
+    reload)
+        if is_running; then
+            call jhqs reload
+        else
+            boot_shell
+            echo "jhqs: started"
+        fi ;;
+    log)
+        if [[ ! -f "$ERROR_LOG" ]]; then
+            echo "jhqs: no error log yet ($ERROR_LOG)" >&2
+            exit 1
+        fi
+        if [[ "${1:-}" == "-f" || "${1:-}" == "--follow" ]]; then
+            shift || true
+            tail -n "${1:-50}" -f "$ERROR_LOG"
+        else
+            tail -n "${1:-50}" "$ERROR_LOG"
+        fi ;;
+    state)
+        if is_running; then call jhqs state; else echo "jhqs: not running"; fi ;;
+    lock)
+        if is_running; then
+            call lockscreen lock
+        else
+            loginctl lock-session >/dev/null 2>&1 || echo "jhqs: not running" >&2
+        fi ;;
+
+    module)
+        [[ $# -ge 1 ]] || { echo "jhqs: module <name> <toggle|open|close>" >&2; exit 2; }
+        module_call "$1" "${2:-toggle}" "${3:-}" ;;
+
+    call)    call "$@" ;;
+    targets) "$QS_BIN" ipc -c "$INSTANCE" show 2>&1 ;;
+    help|-h|--help|"") usage ;;
+    *)
+        echo "jhqs: unknown command '$cmd'" >&2
+        echo "Run 'jhqs help'." >&2
+        exit 2 ;;
+esac
