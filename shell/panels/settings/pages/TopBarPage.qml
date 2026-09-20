@@ -38,13 +38,47 @@ NexusControls.PageBase {
         return false
     }
 
+    // ---- monitors --------------------------------------------------------
+    // Scanned live from Quickshell.screens so hotplugged displays appear
+    // without a restart. "Automatic" keeps the DP-1-first fallback. A saved
+    // monitor that is currently disconnected stays in the config and shows
+    // as "(disconnected)" until it comes back.
+    readonly property string autoMonitorLabel: "Automatic"
+    readonly property var monitorOptions: {
+        let out = [{ name: "", label: root.autoMonitorLabel }]
+        const vals = Theme.availableScreens
+        for (let i = 0; i < vals.length; i++)
+            out.push({ name: "" + vals[i].name, label: Theme.screenLabel(vals[i]) })
+        return out
+    }
+    readonly property string currentMonitorLabel: {
+        const want = Theme.barMonitor
+        if (want === "") return root.autoMonitorLabel
+        for (let i = 1; i < root.monitorOptions.length; i++)
+            if (root.monitorOptions[i].name === want) return root.monitorOptions[i].label
+        return want + " (disconnected)"
+    }
+
     // ---- top level -------------------------------------------------------
     Column {
         width: parent.width
         spacing: 0
         visible: root.componentId === ""
 
-        NexusControls.SectionHeader { first: true; text: "Behaviour" }
+        NexusControls.SectionHeader { first: true; text: "Monitors" }
+        NexusControls.DropdownRow {
+            first: true
+            label: "Taskbar monitor"
+            subtext: "Screen that hosts the taskbar and its popouts"
+            options: root.monitorOptions.map(o => o.label)
+            current: root.currentMonitorLabel
+            onPicked: v => {
+                const m = root.monitorOptions.find(o => o.label === v)
+                if (m) Theme.setBarMonitor(m.name)
+            }
+        }
+
+        NexusControls.SectionHeader { text: "Behaviour" }
         NexusControls.ToggleRow {
             first: true
             text: "Persistent"

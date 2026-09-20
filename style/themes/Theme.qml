@@ -271,6 +271,9 @@ Singleton {
             property bool scrollWorkspaces: true
             property bool scrollVolume: true
             property bool scrollBrightness: true
+            // Taskbar monitor (Settings > Panels > Taskbar > Monitors). Empty
+            // means Automatic: prefer DP-1, else the first available screen.
+            property string monitor: ""
         }
     }
     // Minimal is the only shell theme: former Modern branches deleted.
@@ -518,20 +521,58 @@ Singleton {
         if (polkitReady === nv) return
         polkitReady = nv
     }
-    // ---- primary display (with fallback) ----
-    // Shell windows (bar, menus, dialogs, OSD) live on ONE screen. Prefer
-    // DP-1 so multi-head setups stay put, but fall back to the first
-    // available screen so the shell still shows up when DP-1 doesn't
-    // exist (single laptop display, renamed outputs, …).
+    // ---- taskbar monitor (with fallback) ----
+    // Shell windows (bar, menus, dialogs, OSD) live on ONE screen. The
+    // Monitors dropdown in Settings > Panels > Taskbar (topbar_settings.json
+    // `monitor`) picks it; empty means Automatic: prefer DP-1 so multi-head
+    // setups stay put, but fall back to the first available screen so the
+    // shell still shows up when DP-1 doesn't exist (single laptop display,
+    // renamed outputs, …). A selected monitor that disconnects falls back
+    // the same way and is restored once it comes back.
     readonly property string preferredScreenName: "DP-1"
+    readonly property string barMonitor: "" + (shellFile.adapter.monitor || "")
+    readonly property var availableScreens: {
+        let out = []
+        try {
+            const sc = Quickshell.screens
+            // Quickshell versions differ here: 0.2.x exposes `screens`
+            // array-like (and `.values` as a function), newer builds expose
+            // `.values` as the list itself. Accept both shapes.
+            let vals = sc
+            try {
+                const v = sc && sc.values
+                if (typeof v === "function") vals = v()
+                else if (v !== undefined && v !== null) vals = v
+            } catch (e1) {}
+            if (!vals || typeof vals.length !== "number") vals = sc
+            for (let i = 0; i < vals.length; i++) if (vals[i] && vals[i].name) out.push(vals[i])
+        } catch (e) {}
+        return out
+    }
+    function screenLabel(screenObj: var): string {
+        try { return "" + screenObj.name + " · " + screenObj.width + "×" + screenObj.height } catch (e) { return "" }
+    }
+    function hasScreen(name: string): bool {
+        const vals = availableScreens
+        for (let i = 0; i < vals.length; i++) if ("" + vals[i].name === name) return true
+        return false
+    }
+    function setBarMonitor(name: string): void {
+        const v = "" + (name || "")
+        if (v !== "" && !hasScreen(v)) return
+        if (barMonitor === v) return
+        shellFile.adapter.monitor = v
+        shellFile.writeAdapter()
+    }
     readonly property string primaryScreenName: {
         try {
-            let v = Quickshell.screens.values
-            let vals = (v && typeof v.length === "number") ? v : []
+            const want = barMonitor
+            if (want !== "" && hasScreen(want)) return want
+            const vals = availableScreens
             for (let i = 0; i < vals.length; i++) {
-                if (vals[i] && vals[i].name === preferredScreenName) return preferredScreenName
+                if ("" + vals[i].name === preferredScreenName) return preferredScreenName
             }
-            if (vals.length > 0 && vals[0] && vals[0].name) return "" + vals[0].name
+            if (vals.length > 0) return "" + vals[0].name
         } catch (e) {}
         return preferredScreenName
     }

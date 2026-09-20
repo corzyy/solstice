@@ -67,6 +67,14 @@ Scope {
         function trayAnchor(): string { try { return "systemtray=" + JSON.stringify(Theme.barAnchor("systemtray")) + " bar=" + JSON.stringify(Theme.barWindowRect) } catch (e) { return "err " + e } }
     }
 
+    // Monitor switch (Settings > Panels > Taskbar > Monitors): the new
+    // primary bar window republishes its rect (onVisibleChanged below) and
+    // every slot re-publishes its anchor for the new screen.
+    Connections {
+        target: Theme
+        function onPrimaryScreenNameChanged() { Theme.refreshBarAnchors() }
+    }
+
     Variants {
         model: Quickshell.screens
         PanelWindow {
@@ -95,6 +103,9 @@ Scope {
             onBarPosChanged: requestPublishWindowRect()
             onEdgeDistChanged: requestPublishWindowRect()
             onTopDistChanged: requestPublishWindowRect()
+            // Monitor switch: the newly primary bar publishes its geometry so
+            // popouts settle against the right screen immediately.
+            onVisibleChanged: if (visible) requestPublishWindowRect()
             property string barPos: Theme.barPosition
             property real barOpacity: Theme.barOpacity
             property bool isVertical: barPos === "left" || barPos === "right"

@@ -19,6 +19,7 @@
     "iconBackground": true,
     "moduleSize": 0,
     "moduleSpacing": -3,
+    "monitor": "",
     "motionFluid": true,
     "opacity": 1,
     "panelAccentBorder": false,

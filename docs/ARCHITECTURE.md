@@ -207,7 +207,9 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
 - Colors/radius/anim → only `Theme.*` (never hex literal, no raw `Easing.*`).
 - Persistence → FileView + JsonAdapter + `writeAdapter()` + clamp.
 - IPC → `quickshell ipc -c solstice call <target> <func>` (or `solstice` CLI).
-- DP-1 exclusiveZone only TopBar; others `Theme.isPrimaryScreen(modelData)`.
+- Bar exclusiveZone only on the selected taskbar monitor; all shell surfaces use
+  `Theme.isPrimaryScreen(modelData)` (selection = `monitor` in
+  `config/topbar_settings.json`, empty → DP-1-first fallback).
 - Every panel body: `Flickable { clip: true; boundsBehavior: StopAtBounds;
   contentHeight: col.implicitHeight }`.
 
@@ -854,6 +856,20 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    migrated); the page's "Active pacing" row still reports "Uncapped" if
    `QSG_NO_VSYNC` is pinned in gpu.conf, and a stale `QSG_NO_VSYNC` is
    stripped on the settings restart.
+
+- 2026-09-20 (later): Panels → Taskbar gains a "Monitors" section: a
+   DropdownRow scanned live from `Quickshell.screens` (name · resolution) plus
+   "Automatic". The selection persists as `monitor` in
+   `config/topbar_settings.json`; `Theme.barMonitor`/`setBarMonitor` (validates
+   against connected screens) feed `Theme.primaryScreenName`, which now prefers
+   the selected monitor, then DP-1, then the first screen, so a disconnected
+   monitor falls back and is restored on reconnect. `Theme.availableScreens`/
+   `screenLabel` scan the screen list (this Quickshell exposes `screens`
+   array-like with `.values` as a function, so both shapes are accepted — the
+   old `.values`-only read returned an empty list). TopBar republishes its
+   window rect (`onVisibleChanged`) and bar anchors on
+   `primaryScreenName` changes, and only the selected screen's bar reserves an
+   exclusive zone; popouts keep following `Theme.isPrimaryScreen`.
 
 ## Verification
 ```
