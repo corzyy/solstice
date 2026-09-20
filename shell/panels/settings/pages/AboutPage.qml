@@ -6,13 +6,13 @@ import "../../../../style/themes"
 import "../../../../style/ui"
 import ".."
 
-// About — Android-style system information page. Mirrors the Nexus
-// About layout: a hero card (OS logo, name, version) over grouped
+// System Information — Android-style system information page. Mirrors the
+// Nexus layout: a hero card (OS logo, name, version) over grouped
 // System / Hardware rows. Everything is probed live so the
 // page always describes the running install.
 NexusControls.PageBase {
     id: root
-    title: "About"
+    title: "System Information"
 
     // ---- identity ------------------------------------------------------
     property string osName: ""

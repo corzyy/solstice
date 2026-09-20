@@ -28,7 +28,7 @@ Singleton {
           keywords: "apps app applications default terminal browser file manager library all apps uninstall remove hide launcher matugen theming theme themes template templates application kitty btop gtk qt colours" },
         { id: "setup", title: "Setup", icon: "󰒓", desc: "Date & time, language, keybinds, renderer, updates", category: "system",
           keywords: "setup date time language region locale keybinds keybindings shortcuts renderer vulkan experimental updates" },
-        { id: "about", title: "About", icon: "󰋼", desc: "System information", category: "system",
+        { id: "about", title: "System Information", icon: "󰋼", desc: "About version, hardware, OS details", category: "system",
           keywords: "about system information version specs" }
     ]
 }

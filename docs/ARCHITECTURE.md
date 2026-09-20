@@ -67,7 +67,7 @@ solstice/
 │   │                                 (taskbar editor incl. M3E module layout,
 │   │                                 Launcher page, Screenshot UI page),
 │   │                                 Workspaces, Calendar, Notifications,
-│   │                                 About, Setup)
+│   │                                 System Information, Setup)
 │   │
 │   └── overlays/          — resident surfaces, always instantiated (trigger listeners)
 │       ├── Lockscreen.qml     — blurred-wallpaper lock overlay: centered clock+PIN
