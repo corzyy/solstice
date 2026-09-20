@@ -1,4 +1,4 @@
 {
-    "fpsCap": "display",
-    "fpsOverlay": true
+    "fpsCap": "60",
+    "fpsOverlay": false
 }
