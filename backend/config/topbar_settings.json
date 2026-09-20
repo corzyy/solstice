@@ -43,7 +43,7 @@
     ],
     "workspaceLauncherSync": false,
     "workspaceMaxWindowIcons": 5,
-    "workspaceOccupiedBg": false,
+    "workspaceOccupiedBg": true,
     "workspacePerMonitor": true,
     "workspaceScale": 1.2,
     "workspaceShowUnoccupied": true,
