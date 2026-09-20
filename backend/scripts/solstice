@@ -62,6 +62,26 @@ export vblank_mode="${vblank_mode:=0}"
 # NVIDIA's driver busy-waits on the GPU when VSync is off, pegging one core at
 # 100%; USLEEP parks it instead.
 export __GL_YIELD="${__GL_YIELD:=USLEEP}"
+# VMs / GPU-less machines: Mesa's EGL loader probes for a hardware DRI2 screen,
+# fails and logs "libEGL warning: egl: failed to create dri2 screen", then
+# falls back to llvmpipe anyway (a virtio-gpu 2D guest even exposes a renderD128
+# node, so the probe still runs and fails). Force the software path up front
+# when no usable render node exists or when running under a hypervisor, so the
+# doomed probe never happens; bare metal keeps hardware rendering. gpu.conf can
+# opt back in with LIBGL_ALWAYS_SOFTWARE=0 (e.g. a VM with working virgl).
+if [[ -z "${LIBGL_ALWAYS_SOFTWARE:-}" ]]; then
+    force_software=0
+    have_render_node=0
+    for dev in /dev/dri/renderD*; do
+        [[ -r "$dev" ]] && have_render_node=1 && break
+    done
+    ((have_render_node)) || force_software=1
+    if command -v systemd-detect-virt >/dev/null 2>&1 \
+       && systemd-detect-virt --vm >/dev/null 2>&1; then
+        force_software=1
+    fi
+    ((force_software)) && export LIBGL_ALWAYS_SOFTWARE=1
+fi
 
 # Frame pacing (Settings > Setup > Experimental > Debug). backend/config/
 # debug.json is the single source; the QSG_* pacing variables must exist
@@ -103,6 +123,7 @@ boot_shell() {
             "$QSG_RENDER_LOOP" "$QSG_RHI_BACKEND" "$QT_OPENGL"
         printf '  __GL_SYNC_TO_VBLANK=%s vblank_mode=%s __GL_YIELD=%s\n' \
             "$__GL_SYNC_TO_VBLANK" "$vblank_mode" "$__GL_YIELD"
+        printf '  LIBGL_ALWAYS_SOFTWARE=%s\n' "${LIBGL_ALWAYS_SOFTWARE:-}"
         printf '  QSG_USE_SIMPLE_ANIMATION_DRIVER=%s QSG_FIXED_ANIMATION_STEP=%s QSG_NO_VSYNC=%s\n' \
             "${QSG_USE_SIMPLE_ANIMATION_DRIVER:-}" "${QSG_FIXED_ANIMATION_STEP:-}" "${QSG_NO_VSYNC:-}"
     } >>"$STARTUP_LOG"
