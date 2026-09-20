@@ -9,7 +9,7 @@ curl -fsSL https://raw.githubusercontent.com/corzyy/solstice/main/install.sh | b
 ```
 
 The installer clones the repo to `~/.config/quickshell/solstice`, keeps any existing
-`config/` and `themes/snapshots/`, and starts the shell. Options:
+`backend/config/` and `style/themes/snapshots/`, and starts the shell. Options:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/corzyy/solstice/main/install.sh | bash -s -- --no-start
@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/corzyy/solstice/main/install.sh | b
 ## Update
 
 ```sh
-~/.config/quickshell/solstice/scripts/update-shell.sh
+~/.config/quickshell/solstice/backend/scripts/update-shell.sh
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the code layout.

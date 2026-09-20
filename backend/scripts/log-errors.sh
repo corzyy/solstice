@@ -6,7 +6,7 @@
 # and appends every ERROR / WARN / CRITICAL / FATAL line with a timestamp
 # to the output file, so errors are saved while the shell is running.
 #
-# Started by services/LogService.qml; safe to run manually:
+# Started by backend/services/LogService.qml; safe to run manually:
 #   log-errors.sh <shell-pid> <marker> <output-file>
 #   log-errors.sh --stop <log-dir>
 #

@@ -6,9 +6,9 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
 import Quickshell.Wayland
-import "../../themes"
-import "../../services"
-import "../../ui"
+import "../../../style/themes"
+import "../../../backend/services"
+import "../../../style/ui"
 
 Scope {
     id: scope
@@ -62,7 +62,7 @@ Scope {
     readonly property string barPos: Theme.barPosition
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
 
-    // Hidden tiles persist in config/controlcenter.json (hiddenTiles array)
+    // Hidden tiles persist in backend/config/controlcenter.json (hiddenTiles array)
     // so a hide survives closing/reopening the panel.
     function hiddenTileIds(): var {
         let out = []
@@ -91,13 +91,13 @@ Scope {
     // Edit mode: the panel's reorderable sections (see moveBlock) and the
     // tiles inside the tiles block (free 4-column placement + 1x1..2x2 span
     // per tile, see tilePos/tileCols/tileRows). All of it persists in
-    // config/controlcenter.json so a dragged layout survives restarts;
+    // backend/config/controlcenter.json so a dragged layout survives restarts;
     // unknown/missing ids fall back to the default order.
     readonly property var ccBlockIds: ["tiles", "sliders", "media"]
     readonly property var ccTileIds: ["wifi", "bluetooth", "dnd", "updates"]
     FileView {
         id: ccLayoutFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/controlcenter.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/controlcenter.json"
         watchChanges: true; onFileChanged: ccReloadTimer.restart(); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var blocks: ["tiles", "sliders", "media"]
@@ -309,7 +309,7 @@ Scope {
         return false
     }
     // Publish where a drill-in was clicked from (window coordinates): the
-    // incoming panel morphs out of that rect and back into it (ui/PanelMorph
+    // incoming panel morphs out of that rect and back into it (style/ui/PanelMorph
     // overlay run).
     function publishOriginFor(targetId: string, item: var): void {
         if (!item)

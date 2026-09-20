@@ -2,21 +2,21 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../util"
+import "../../style/ui"
 
 // WallpaperService — shared wallpaper backend for the Settings "Wallpaper &
 // style" page. Owns the wallpaper settings file
-// (config/wallpaper_settings.json), the wallpaper directory scan, the
+// (backend/config/wallpaper_settings.json), the wallpaper directory scan, the
 // display-only switch (swaybg + current pointers) and the recent-wallpapers
 // ring used by the page's carousel. Theming stays with ThemeEngine: callers
 // remember the wallpaper and kick monet after a successful display switch.
 Singleton {
     id: root
 
-    // ---- settings (config/wallpaper_settings.json) ----
+    // ---- settings (backend/config/wallpaper_settings.json) ----
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/wallpaper_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/wallpaper_settings.json"
         watchChanges: true; onFileChanged: reload(); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property string transitionType: "grow"
@@ -87,7 +87,11 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 let out = (text || "").trim()
-                if (out.length === 0) { root.files = []; root.resolvedDir = ""; return }
+                if (out.length === 0) {
+                    if (!root.sameFileList(root.files, [])) root.files = []
+                    root.resolvedDir = ""
+                    return
+                }
                 let lines = out.split("\n")
                 if (lines.length > 0 && lines[0].startsWith("#DIR=")) {
                     root.resolvedDir = lines[0].slice(5).trim()
@@ -112,12 +116,22 @@ Singleton {
                         files.push(l)
                     }
                 }
-                root.files = files
+                // A rescan usually returns the exact same list (the carousel
+                // refreshes on every open). Reassigning `files` would hand the
+                // pickers a new model identity and rebuild every tile/image
+                // mid-animation, so only publish an actual change.
+                if (!root.sameFileList(root.files, files)) root.files = files
                 root._thumbMap = thumbs
                 root.thumbsRev++
                 root.maybeGenerateThumbs()
             }
         }
+    }
+    function sameFileList(a, b): bool {
+        if (!a || !b || a.length !== b.length) return false
+        for (let i = 0; i < a.length; i++)
+            if (a[i] !== b[i]) return false
+        return true
     }
     function refresh(): void {
         if (listProc.running) return
@@ -129,7 +143,7 @@ Singleton {
         // Existing thumbnails are emitted as "path<TAB>thumb" with builtin
         // tests only (no forks per file): the mirrored cache path is derived
         // from the path relative to the wallpaper root. Missing thumbs are
-        // generated afterwards by scripts/wallpaper-thumbs.sh, which streams
+        // generated afterwards by backend/scripts/wallpaper-thumbs.sh, which streams
         // the same path<TAB>thumb lines as they appear.
         cmd += " if [ -n \"$D\" ] && [ -d \"$D\" ]; then"
         cmd += " find \"$D\" -mindepth 1 -maxdepth 2 -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' -o -iname '*.bmp' -o -iname '*.gif' -o -iname '*.tiff' \\) 2>/dev/null"
@@ -141,7 +155,7 @@ Singleton {
         listProc.running = true
     }
 
-    // ---- thumbnail cache (scripts/wallpaper-thumbs.sh) ----
+    // ---- thumbnail cache (backend/scripts/wallpaper-thumbs.sh) ----
     // Qt Quick decodes the FULL-resolution image for every `sourceSize` (the
     // JPEG/PNG handlers ignore scaled reads here): measured 130-460ms for
     // this library's large wallpapers, which is exactly the settings/carousel
@@ -198,7 +212,7 @@ Singleton {
         let dir = resolvedDir !== "" ? resolvedDir : directoryConfigured
         if (dir === "" || files.length === 0) return
         if (thumbsProc.running) return
-        thumbsProc.command = ["bash", Quickshell.shellDir + "/scripts/wallpaper-thumbs.sh", dir, thumbCacheDir]
+        thumbsProc.command = ["bash", Quickshell.shellDir + "/backend/scripts/wallpaper-thumbs.sh", dir, thumbCacheDir]
         thumbsProc.running = true
     }
     function thumbFor(path: string): string {
@@ -220,7 +234,7 @@ Singleton {
     // ---- current wallpaper ----
     FileView {
         id: currentFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/current_wallpaper.txt"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/current_wallpaper.txt"
         watchChanges: true; onFileChanged: reload(); blockLoading: true; printErrors: false
     }
     readonly property string current: {
@@ -230,7 +244,7 @@ Singleton {
     // ---- recent wallpapers (carousel) ----
     FileView {
         id: recentFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/recent_wallpapers.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/recent_wallpapers.json"
         blockLoading: true; printErrors: false
         adapter: JsonAdapter { property var wallpapers: [] }
     }
@@ -331,7 +345,7 @@ Singleton {
         if (path.includes("\n") || path.includes("\r")) return false
         spawnSwaybg(path)
         previewPath = ""
-        let cmd = "WALL=\"$1\"; mkdir -p ~/.cache/swaybg ~/.cache/awww ~/.config/quickshell/solstice/config 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/swaybg/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/awww/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null"
+        let cmd = "WALL=\"$1\"; mkdir -p ~/.cache/swaybg ~/.cache/awww ~/.config/quickshell/solstice/backend/config 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/swaybg/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.cache/awww/current 2>/dev/null; printf '%s' \"$WALL\" > ~/.config/quickshell/solstice/backend/config/current_wallpaper.txt 2>/dev/null"
         Quickshell.execDetached(["bash", "-c", cmd, "solstice-wallpaper-state", path])
         pushRecent(path)
         return true

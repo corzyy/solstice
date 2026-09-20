@@ -1,0 +1,9 @@
+{
+    "browser": {
+        "action": "spawn:helium",
+        "chord": "Mod+B",
+        "command": "helium",
+        "id": "helium",
+        "name": "Helium"
+    }
+}

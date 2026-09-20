@@ -1,11 +1,11 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
+import "../../../../style/themes"
 import ".."
 
 // Screenshot UI settings, reached through Settings > Panels > Screenshot UI.
-// The pill itself lives in overlays/ScreenshotUI.qml, the capture backend in
-// scripts/screenshot.sh; everything here persists to config/screenshot.json.
+// The pill itself lives in shell/overlays/ScreenshotUI.qml, the capture backend in
+// backend/scripts/screenshot.sh; everything here persists to backend/config/screenshot.json.
 NexusControls.PageBase {
     id: root
     title: "Screenshot UI"

@@ -1,6 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
+import "../../../../style/themes"
 import ".."
 
 // Taskbar settings, mirroring Caelestia Nexus TaskbarPanel:
@@ -19,9 +19,11 @@ NexusControls.PageBase {
         {id: "controlcenter", title: "Control center", desc: "Quick toggles, media", icon: "󰘮"}
     ]
     readonly property var currentComp: {
+        if (root.componentId === "sizegaps") return root.sizeGapsPage
         for (let i = 0; i < root.comps.length; i++) if (root.comps[i].id === root.componentId) return root.comps[i]
         return null
     }
+    readonly property var sizeGapsPage: ({id: "sizegaps", title: "Size and gaps", desc: "Taskbar size, module size, gaps and screen edge padding", icon: "󰔎"})
     function showInTaskbar(id: string): bool { return !Theme.isBarModuleHidden(id) }
     function setInTaskbar(id: string, on: bool): void {
         if (on) Theme.showBarModule(id)
@@ -115,6 +117,17 @@ NexusControls.PageBase {
             checked: Theme.barScrollBrightness
             onToggled: n => Theme.setBarScrollBrightness(n)
         }
+
+        NexusControls.SectionHeader { text: "Layout" }
+        NexusControls.NavRow {
+            first: true
+            last: true
+            icon: "󰔎"
+            tint: Theme.tertiary
+            text: "Size and gaps"
+            subtext: "Taskbar size, module size, gaps and screen edge padding"
+            onClicked: root.componentId = "sizegaps"
+        }
     }
 
     // ---- component drill-in ----------------------------------------------
@@ -131,6 +144,7 @@ NexusControls.PageBase {
             case "systemtray": return statusComp
             case "clock": return clockComp
             case "controlcenter": return controlCenterComp
+            case "sizegaps": return sizeGapsComp
             }
             return null
         }
@@ -173,6 +187,24 @@ NexusControls.PageBase {
                 subtext: "Focused window icon in the taskbar"
                 checked: root.showInTaskbar("activewindow")
                 onToggled: n => root.setInTaskbar("activewindow", n)
+            }
+            NexusControls.SectionHeader { text: "Icon" }
+            NexusControls.ToggleRow {
+                first: true
+                icon: "󰍹"
+                text: "Glyph icons"
+                subtext: "Draw window icons as symbol-font glyphs instead of app icons"
+                checked: Theme.glyphWindowIcons
+                onToggled: n => Theme.setGlyphWindowIcons(n)
+            }
+            NexusControls.ToggleRow {
+                last: true
+                icon: "󰕰"
+                tint: Theme.tertiary
+                text: "Icon background"
+                subtext: "Random M3 expressive shape behind the icon"
+                checked: Theme.iconBackground
+                onToggled: n => Theme.setIconBackground(n)
             }
             NexusControls.SectionHeader { text: "Title" }
             NexusControls.ToggleRow {
@@ -261,6 +293,22 @@ NexusControls.PageBase {
             NexusControls.Note {
                 text: "Right-clicking the clock cycles through the formats as well."
             }
+            NexusControls.SectionHeader { text: "Icon" }
+            NexusControls.ToggleRow {
+                first: true
+                text: "Show icon"
+                subtext: "Calendar icon in front of the date and time"
+                checked: Theme.clockIcon
+                onToggled: n => Theme.setClockIcon(n)
+            }
+            NexusControls.ToggleRow {
+                last: true
+                tint: Theme.tertiary
+                text: "Icon background"
+                subtext: "Random M3 expressive shape behind the icon"
+                checked: Theme.clockIconBackground
+                onToggled: n => Theme.setClockIconBackground(n)
+            }
             NexusControls.SectionHeader { text: "Background" }
             NexusControls.ToggleRow {
                 first: true
@@ -297,6 +345,99 @@ NexusControls.PageBase {
                 subtext: "Rounded card behind the status icons"
                 checked: Theme.barBackgroundEnabled("controlcenter")
                 onToggled: n => Theme.setBarBackgroundEnabled("controlcenter", n)
+            }
+        }
+    }
+
+    // ---- Size and gaps ---------------------------------------------------
+    Component {
+        id: sizeGapsComp
+        Column {
+            width: parent ? parent.width : 300
+            spacing: 0
+            NexusControls.SectionHeader { first: true; text: "Taskbar" }
+            NexusControls.SliderRow {
+                first: true
+                icon: "󰍹"
+                label: "Size"
+                from: 20
+                to: 48
+                stepSize: 1
+                unit: "px"
+                value: Theme.barThickness
+                onMoved: v => Theme.setBarThickness(Math.round(v))
+                onApplied: v => Theme.setBarThickness(Math.round(v))
+            }
+            NexusControls.SliderRow {
+                last: true
+                icon: "󰍹"
+                tint: Theme.tertiary
+                label: "Module size"
+                from: 12
+                to: 46
+                stepSize: 1
+                unit: "px"
+                value: Theme.barCardExtent
+                onMoved: v => Theme.setBarModuleSize(Math.round(v))
+                onApplied: v => Theme.setBarModuleSize(Math.round(v))
+            }
+            NexusControls.Note {
+                text: "Module size is the uniform size of the background cards. It follows the taskbar size until adjusted here."
+            }
+            NexusControls.SectionHeader { text: "Spacing" }
+            NexusControls.SliderRow {
+                first: true
+                icon: "󰕰"
+                label: "Between modules"
+                from: -12
+                to: 24
+                stepSize: 1
+                unit: "px"
+                value: Theme.barModuleSpacing
+                onMoved: v => Theme.setBarModuleSpacing(Math.round(v))
+                onApplied: v => Theme.setBarModuleSpacing(Math.round(v))
+            }
+            NexusControls.SliderRow {
+                last: true
+                icon: "󰕰"
+                tint: Theme.tertiary
+                label: "Content padding"
+                from: 0
+                to: 32
+                stepSize: 1
+                unit: "px"
+                value: Theme.barContentPadding
+                onMoved: v => Theme.setBarContentPadding(Math.round(v))
+                onApplied: v => Theme.setBarContentPadding(Math.round(v))
+            }
+            NexusControls.SectionHeader { text: "Screen edges" }
+            NexusControls.SliderRow {
+                first: true
+                icon: "󰖔"
+                label: "Screen gap"
+                from: 0
+                to: 32
+                stepSize: 1
+                unit: "px"
+                value: Theme.barTopDistance
+                onMoved: v => Theme.setBarTopDistance(Math.round(v))
+                onApplied: v => Theme.setBarTopDistance(Math.round(v))
+            }
+            NexusControls.SliderRow {
+                last: true
+                icon: "󰖔"
+                tint: Theme.tertiary
+                label: "Side padding"
+                from: 0
+                to: 200
+                stepSize: 1
+                unit: "px"
+                value: Theme.barEdgeDistance
+                onMoved: v => Theme.setBarEdgeDistance(Math.round(v))
+                onApplied: v => Theme.setBarEdgeDistance(Math.round(v))
+            }
+            NexusControls.Note {
+                text: "Screen gap lifts the bar off the edge it is anchored to; side padding insets its ends from the screen edges."
             }
         }
     }

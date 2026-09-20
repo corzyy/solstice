@@ -1,7 +1,7 @@
 #!/bin/bash
 # Update the solstice quickshell from GitHub:
 #   git clone the repo, install it over the live checkout (keeping the user's
-#   config/ and themes/snapshots/), then restart the shell.
+#   backend/config/ and style/themes/snapshots/), then restart the shell.
 set -u
 
 REPO="${SOLSTICE_REPO:-https://github.com/corzyy/solstice}"
@@ -12,7 +12,7 @@ usage() {
     echo "Usage: update-shell.sh [-y|--yes|--unattended] [--no-reload]"
     echo ""
     echo "Clones $REPO and installs it over $DEST,"
-    echo "preserving config/ and themes/snapshots/, then restarts the shell."
+    echo "preserving backend/config/ and style/themes/snapshots/, then restarts the shell."
     echo "Override with SOLSTICE_REPO / SOLSTICE_DEST env vars."
     echo "Set SOLSTICE_NO_RELOAD=1 or pass --no-reload to skip the restart."
 }
@@ -57,21 +57,21 @@ fi
 # Preserve user-owned state that must survive the update.
 KEEP="$TMP/keep"
 mkdir -p "$KEEP"
-if [[ -d "$DEST/config" ]]; then
-    cp -a "$DEST/config" "$KEEP/config"
+if [[ -d "$DEST/backend/config" ]]; then
+    cp -a "$DEST/backend/config" "$KEEP/backend/config"
 fi
-if [[ -d "$DEST/themes/snapshots" ]]; then
-    mkdir -p "$KEEP/themes"
-    cp -a "$DEST/themes/snapshots" "$KEEP/themes/snapshots"
+if [[ -d "$DEST/style/themes/snapshots" ]]; then
+    mkdir -p "$KEEP/style/themes"
+    cp -a "$DEST/style/themes/snapshots" "$KEEP/style/themes/snapshots"
 fi
 # Install brand-new default configs without overwriting user settings.
-if [[ -d "$TMP/repo/config" && -d "$KEEP/config" ]]; then
-    for src in "$TMP/repo/config/"*; do
+if [[ -d "$TMP/repo/backend/config" && -d "$KEEP/backend/config" ]]; then
+    for src in "$TMP/repo/backend/config/"*; do
         [[ -e "$src" ]] || continue
         base="$(basename "$src")"
-        if [[ ! -e "$KEEP/config/$base" ]]; then
+        if [[ ! -e "$KEEP/backend/config/$base" ]]; then
             echo "New default config: $base"
-            cp -a "$src" "$KEEP/config/$base"
+            cp -a "$src" "$KEEP/backend/config/$base"
         fi
     done
 fi
@@ -85,7 +85,7 @@ fi
 
 # Swap the fresh clone into place (keeping the previous checkout until it
 # succeeds, so a failed rename cannot leave the install missing).
-echo "Installing to $DEST (keeping config/ and themes/snapshots/) ..."
+echo "Installing to $DEST (keeping backend/config/ and style/themes/snapshots/) ..."
 if [[ -d "$DEST" ]]; then
     mv "$DEST" "$TMP/old"
 fi
@@ -95,17 +95,25 @@ if ! mv "$TMP/repo" "$DEST"; then
     exit 1
 fi
 
-if [[ -d "$KEEP/config" ]]; then
-    rm -rf "$DEST/config"
-    cp -a "$KEEP/config" "$DEST/config"
+if [[ -d "$KEEP/backend/config" ]]; then
+    rm -rf "$DEST/backend/config"
+    cp -a "$KEEP/backend/config" "$DEST/backend/config"
 fi
-if [[ -d "$KEEP/themes/snapshots" ]]; then
-    mkdir -p "$DEST/themes"
-    rm -rf "$DEST/themes/snapshots"
-    cp -a "$KEEP/themes/snapshots" "$DEST/themes/snapshots"
+if [[ -d "$KEEP/style/themes/snapshots" ]]; then
+    mkdir -p "$DEST/style/themes"
+    rm -rf "$DEST/style/themes/snapshots"
+    cp -a "$KEEP/style/themes/snapshots" "$DEST/style/themes/snapshots"
 fi
 
-chmod +x "$DEST/scripts/"*.sh "$DEST/scripts/solstice" 2>/dev/null || true
+chmod +x "$DEST/backend/scripts/"*.sh "$DEST/backend/scripts/solstice" 2>/dev/null || true
+
+# Keep the `solstice` CLI in PATH pointing at the live install: Umbriel's
+# autostart and all shell keybinds spawn through it. Skipped for test installs.
+if [[ -z "${SOLSTICE_DEST:-}" ]]; then
+    BIN_DIR="$HOME/.local/bin"
+    mkdir -p "$BIN_DIR"
+    ln -sf "$DEST/backend/scripts/solstice" "$BIN_DIR/solstice"
+fi
 
 # Restart the shell so the new files take effect immediately.
 # Skipped for test installs (SOLSTICE_DEST) unless explicitly allowed.

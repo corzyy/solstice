@@ -11,7 +11,7 @@ import Quickshell.Io
 // language = one dictionary entry.
 //
 // `language` (shell UI) and `location` (formats) are independent and
-// persisted in config/language.json. Both switch live: `t()` reads
+// persisted in backend/config/language.json. Both switch live: `t()` reads
 // `language` and `formatLocale` reads `location` inside the callers'
 // bindings, so QML re-evaluates them without a reload.
 Singleton {
@@ -113,10 +113,10 @@ Singleton {
     readonly property string monthDayFormat: root.location === "DE" ? "d. MMM" : "MMM d"
     readonly property string weekdayMonthDayFormat: root.location === "DE" ? "ddd, d. MMM" : "ddd, MMM d"
 
-    // ---- persistence (config/language.json) ------------------------------
+    // ---- persistence (backend/config/language.json) ------------------------------
     FileView {
         id: languageFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/language.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/language.json"
         watchChanges: true; blockLoading: true; printErrors: false
         onFileChanged: languageReloadDebounce.restart()
         adapter: JsonAdapter {

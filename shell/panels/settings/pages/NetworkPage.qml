@@ -1,8 +1,8 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
-import "../../../services"
-import "../../../ui"
+import "../../../../style/themes"
+import "../../../../backend/services"
+import "../../../../style/ui"
 import ".."
 
 // Android 17 Settings — Network & internet.

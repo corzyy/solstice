@@ -6,8 +6,8 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Services.SystemTray
-import "../themes"
-import "../ui"
+import "../../style/themes"
+import "../../style/ui"
 
 Scope {
     id: trayScope
@@ -85,7 +85,7 @@ Scope {
                 enabled: trayScope.showTray
                 onClicked: trayScope.dismissed()
             }
-            // Caelestia popout (ui/CaelestiaPopout): curtain reveal from
+            // Caelestia popout (style/ui/CaelestiaPopout): curtain reveal from
             // behind the bar edge + slide + nested fades, all off one
             // offsetScale driver (1:1 with caelestia-dots/shell).
             CaelestiaPopout {

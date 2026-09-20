@@ -1,4 +1,5 @@
 singleton HistoryService 1.0 HistoryService.qml
+singleton InstanceGuard 1.0 InstanceGuard.qml
 singleton LogService 1.0 LogService.qml
 singleton UpdateService 1.0 UpdateService.qml
 singleton NetworkService 1.0 NetworkService.qml
@@ -6,6 +7,7 @@ singleton VolumeService 1.0 VolumeService.qml
 singleton WallpaperService 1.0 WallpaperService.qml
 singleton BluetoothService 1.0 BluetoothService.qml
 singleton SettingsService 1.0 SettingsService.qml
+singleton SettingsRegistry 1.0 SettingsRegistry.qml
 singleton VitalsService 1.0 VitalsService.qml
 singleton UmbrielService 1.0 UmbrielService.qml
 singleton I18n 1.0 I18n.qml

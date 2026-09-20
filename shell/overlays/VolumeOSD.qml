@@ -5,8 +5,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Pipewire
-import "../themes"
-import "../ui" as Ui
+import "../../style/themes"
+import "../../style/ui" as Ui
 
 Scope {
     id: osdScope
@@ -212,7 +212,7 @@ Scope {
     property bool pollOverride: false
     Process {
         id: pollProc
-        command: ["bash", "-c", Quickshell.shellDir + "/scripts/volume.sh get 2>/dev/null | tr -d '\\n'"]
+        command: ["bash", "-c", Quickshell.shellDir + "/backend/scripts/volume.sh get 2>/dev/null | tr -d '\\n'"]
         stdout: StdioCollector {
             onStreamFinished: {
                 let txt = (text || "").trim()

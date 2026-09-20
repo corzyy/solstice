@@ -1,0 +1,1097 @@
+{
+    "source": "https://github.com/InioX/matugen-themes",
+    "rawBase": "https://raw.githubusercontent.com/InioX/matugen-themes/main",
+    "entries": [
+        {
+            "id": "gtk3",
+            "title": "GTK 3",
+            "category": "Desktop & system",
+            "desc": "Colours for GTK 3 applications",
+            "blocks": [
+                {
+                    "id": "gtk3",
+                    "remote": "templates/gtk-colors.css",
+                    "input": "{templates}/gtk-colors.css",
+                    "output": "{HOME}/.config/gtk-3.0/colors.css",
+                    "post_hook": "bash -c 'gsettings set org.gnome.desktop.interface gtk-theme \"\"; if [ \"{{mode}}\" = \"dark\" ]; then gsettings set org.gnome.desktop.interface gtk-theme \"adw-gtk3-dark\"; else gsettings set org.gnome.desktop.interface gtk-theme \"adw-gtk3\"; fi'"
+                }
+            ],
+            "toggle": "templateGtk3",
+            "note": "Needs @import 'colors.css' in gtk.css",
+            "remove_hook": "T=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null); if [ -n \"$T\" ]; then gsettings set org.gnome.desktop.interface gtk-theme \"\"; gsettings set org.gnome.desktop.interface gtk-theme \"$T\"; fi"
+        },
+        {
+            "id": "gtk4",
+            "title": "GTK 4",
+            "category": "Desktop & system",
+            "desc": "Colours for GTK 4 applications",
+            "blocks": [
+                {
+                    "id": "gtk4",
+                    "remote": "templates/gtk-colors.css",
+                    "input": "{templates}/gtk-colors.css",
+                    "output": "{HOME}/.config/gtk-4.0/colors.css",
+                    "post_hook": "{HOME}/.config/matugen/post-hook-scripts/gtk-themes-reload.sh"
+                }
+            ],
+            "toggle": "templateGtk4",
+            "note": "Needs @import 'colors.css' in gtk.css",
+            "remove_hook": "T=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null); if [ -n \"$T\" ]; then gsettings set org.gnome.desktop.interface gtk-theme \"\"; gsettings set org.gnome.desktop.interface gtk-theme \"$T\"; fi"
+        },
+        {
+            "id": "qt5ct",
+            "title": "Qt 5",
+            "category": "Desktop & system",
+            "desc": "qt5ct colour scheme",
+            "blocks": [
+                {
+                    "id": "qt5ct",
+                    "remote": "templates/qtct-colors.conf",
+                    "input": "{templates}/qtct-colors.conf",
+                    "output": "{HOME}/.config/qt5ct/colors/matugen.conf",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateQt5ct",
+            "note": "Select matugen in qt5ct"
+        },
+        {
+            "id": "qt6ct",
+            "title": "Qt 6",
+            "category": "Desktop & system",
+            "desc": "qt6ct colour scheme",
+            "blocks": [
+                {
+                    "id": "qt6ct",
+                    "remote": "templates/qtct-colors.conf",
+                    "input": "{templates}/qtct-colors.conf",
+                    "output": "{HOME}/.config/qt6ct/colors/matugen.conf",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateQt6ct",
+            "note": "Select matugen in qt6ct"
+        },
+        {
+            "id": "qt-colorscheme",
+            "title": "KDE colour scheme",
+            "category": "Desktop & system",
+            "desc": "Matugen.colors for KDE / qt*ct",
+            "blocks": [
+                {
+                    "id": "qt-colorscheme",
+                    "remote": "templates/Matugen.colors",
+                    "input": "{templates}/Matugen.colors",
+                    "output": "{HOME}/.local/share/color-schemes/Matugen.colors",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateQtColorscheme",
+            "note": "Pick Matugen in the colour scheme settings"
+        },
+        {
+            "id": "kvantum",
+            "title": "Kvantum (KDE)",
+            "category": "Desktop & system",
+            "desc": "Kvantum widget style and SVG assets",
+            "blocks": [
+                {
+                    "id": "kvantum_kvconfig",
+                    "remote": "templates/kvantum-colors.kvconfig",
+                    "input": "{templates}/kvantum-colors.kvconfig",
+                    "output": "{HOME}/.config/Kvantum/matugen/matugen.kvconfig",
+                    "post_hook": ""
+                },
+                {
+                    "id": "kvantum_svg",
+                    "remote": "templates/kvantum-colors.svg",
+                    "input": "{templates}/kvantum-colors.svg",
+                    "output": "{HOME}/.config/Kvantum/matugen/matugen.svg",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Set theme=matugen in kvantum.kvconfig"
+        },
+        {
+            "id": "papirus",
+            "title": "Papirus folders",
+            "category": "Desktop & system",
+            "desc": "Recolours Papirus folder icons",
+            "blocks": [
+                {
+                    "id": "papirus",
+                    "remote": "templates/papirus-color",
+                    "input": "{templates}/papirus-folders.sh",
+                    "output": "{HOME}/.cache/matugen/papirus-folders.sh",
+                    "post_hook": "bash {HOME}/.cache/matugen/papirus-folders.sh"
+                }
+            ],
+            "toggle": "templatePapirus",
+            "note": "Needs a passwordless sudoers rule for papirus-folders"
+        },
+        {
+            "id": "gnome-shell",
+            "title": "GNOME Shell",
+            "category": "Desktop & system",
+            "desc": "Material-Gnome shell theme",
+            "blocks": [
+                {
+                    "id": "gnome-shell",
+                    "remote": "templates/gnome-shell.css",
+                    "input": "{templates}/gnome-shell.css",
+                    "output": "{HOME}/.themes/Material-Gnome/gnome-shell/gnome-shell.css",
+                    "post_hook": "dconf write /org/gnome/shell/extensions/user-theme/name \"'default'\" && dconf write /org/gnome/shell/extensions/user-theme/name \"'Material-Gnome'\""
+                }
+            ],
+            "note": "Needs index.theme + the user-theme extension",
+            "remove_hook": "dconf write /org/gnome/shell/extensions/user-theme/name \"'default'\" 2>/dev/null || true"
+        },
+        {
+            "id": "hyprland",
+            "title": "Hyprland",
+            "category": "Desktop & system",
+            "desc": "Hyprland border and window colours",
+            "blocks": [
+                {
+                    "id": "hyprland",
+                    "remote": "templates/hyprland-colors.lua",
+                    "input": "{templates}/hyprland-colors.lua",
+                    "output": "{HOME}/.config/hypr/matugen-colors.lua",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Add require(\"matugen-colors\") to hyprland.lua"
+        },
+        {
+            "id": "niri",
+            "title": "Niri",
+            "category": "Desktop & system",
+            "desc": "Niri focus ring, border and shadow colours",
+            "blocks": [
+                {
+                    "id": "niri",
+                    "remote": "templates/niri-colors.kdl",
+                    "input": "{templates}/niri-colors.kdl",
+                    "output": "{HOME}/.config/niri/colors.kdl",
+                    "post_hook": "niri msg action load-config-file 2>/dev/null || true"
+                }
+            ],
+            "note": "Add include \"./colors.kdl\" to config.kdl",
+            "remove_hook": "niri msg action load-config-file 2>/dev/null || true"
+        },
+        {
+            "id": "labwc",
+            "title": "Labwc",
+            "category": "Desktop & system",
+            "desc": "Labwc window decorations",
+            "blocks": [
+                {
+                    "id": "labwc",
+                    "remote": "templates/labwc",
+                    "input": "{templates}/labwc",
+                    "output": "{HOME}/.config/labwc/themerc-override",
+                    "post_hook": "labwc -reload 2>/dev/null || true"
+                }
+            ],
+            "remove_hook": "labwc -reload 2>/dev/null || true"
+        },
+        {
+            "id": "sway",
+            "title": "Sway",
+            "category": "Desktop & system",
+            "desc": "Sway window and border colours",
+            "blocks": [
+                {
+                    "id": "sway",
+                    "remote": "templates/sway-colors.conf",
+                    "input": "{templates}/sway-colors.conf",
+                    "output": "{HOME}/.config/sway/colors.conf",
+                    "post_hook": "swaymsg reload 2>/dev/null || true"
+                }
+            ],
+            "note": "Add include colors.conf to the sway config",
+            "remove_hook": "swaymsg reload 2>/dev/null || true"
+        },
+        {
+            "id": "swaybar",
+            "title": "Swaybar",
+            "category": "Desktop & system",
+            "desc": "Sway bar colours",
+            "blocks": [
+                {
+                    "id": "swaybar",
+                    "remote": "templates/swaybar-colors.conf",
+                    "input": "{templates}/swaybar-colors.conf",
+                    "output": "{HOME}/.config/sway/bar-colors.conf",
+                    "post_hook": "swaymsg reload 2>/dev/null || true"
+                }
+            ],
+            "note": "Add include bar-colors.conf to the sway config",
+            "remove_hook": "swaymsg reload 2>/dev/null || true"
+        },
+        {
+            "id": "hyprwat",
+            "title": "Hyprwat",
+            "category": "Desktop & system",
+            "desc": "Hyprwat colour overrides",
+            "blocks": [
+                {
+                    "id": "hyprwat",
+                    "remote": "templates/hyprwat-colors.toml",
+                    "input": "{templates}/hyprwat-colors.toml",
+                    "output": "{HOME}/.config/hyprwat/hyprwat-colors.toml",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Source it from hyprwat.conf"
+        },
+        {
+            "id": "mango",
+            "title": "MangoWC",
+            "category": "Desktop & system",
+            "desc": "Mango compositor colours",
+            "blocks": [
+                {
+                    "id": "mango",
+                    "remote": "templates/mango.conf",
+                    "input": "{templates}/colors.conf",
+                    "output": "{HOME}/.config/mango/colors.conf",
+                    "post_hook": "mmsg dispatch reload_config >/dev/null 2>&1 || true"
+                }
+            ],
+            "note": "Add source=~/.config/mango/colors.conf to config.conf",
+            "remove_hook": "mmsg dispatch reload_config >/dev/null 2>&1 || true"
+        },
+        {
+            "id": "wlogout",
+            "title": "wlogout",
+            "category": "Desktop & system",
+            "desc": "Logout screen colours",
+            "blocks": [
+                {
+                    "id": "wlogout",
+                    "remote": "templates/colors.css",
+                    "input": "{templates}/wlogout-colors.css",
+                    "output": "{HOME}/.config/wlogout/colors.css",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Add @import \"colors.css\" to style.css"
+        },
+        {
+            "id": "waybar",
+            "title": "Waybar",
+            "category": "Desktop & system",
+            "desc": "Waybar bar colours",
+            "blocks": [
+                {
+                    "id": "waybar",
+                    "remote": "templates/colors.css",
+                    "input": "{templates}/waybar-colors.css",
+                    "output": "{HOME}/.config/waybar/colors.css",
+                    "post_hook": "pkill -SIGUSR2 waybar 2>/dev/null || true"
+                }
+            ],
+            "note": "Add @import \"colors.css\" to style.css",
+            "remove_hook": "pkill -SIGUSR2 waybar 2>/dev/null || true"
+        },
+        {
+            "id": "cosmic",
+            "title": "COSMIC",
+            "category": "Desktop & system",
+            "desc": "COSMIC desktop theme (import in Settings)",
+            "blocks": [
+                {
+                    "id": "cosmic",
+                    "remote": "templates/cosmic_theme.ron",
+                    "input": "{templates}/cosmic_theme.ron",
+                    "output": "{HOME}/.config/matugen/themes/matugen_cosmic.theme.ron",
+                    "post_hook": "python3 {templates}/cosmic_postprocess.py {HOME}/.config/matugen/themes/matugen_cosmic.theme.ron"
+                },
+                {
+                    "id": "",
+                    "remote": "templates/cosmic_postprocess.py",
+                    "input": "{templates}/cosmic_postprocess.py",
+                    "output": "",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Import the theme in COSMIC Settings > Appearance"
+        },
+        {
+            "id": "wine",
+            "title": "Wine",
+            "category": "Desktop & system",
+            "desc": "Wine registry colours",
+            "blocks": [
+                {
+                    "id": "wine",
+                    "remote": "templates/wine.reg",
+                    "input": "{templates}/wine.reg",
+                    "output": "/tmp/wine.reg",
+                    "post_hook": "wine regedit /tmp/wine.reg 2>/dev/null || true"
+                }
+            ]
+        },
+        {
+            "id": "starship",
+            "title": "Starship",
+            "category": "Desktop & system",
+            "desc": "Starship prompt colours",
+            "blocks": [
+                {
+                    "id": "starship",
+                    "remote": "templates/starship-colors.toml",
+                    "input": "{templates}/starship-colors.toml",
+                    "output": "{HOME}/.config/starship.toml",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Replaces the whole starship.toml"
+        },
+        {
+            "id": "kitty",
+            "title": "Kitty",
+            "category": "Terminals",
+            "desc": "GPU terminal emulator colours",
+            "blocks": [
+                {
+                    "id": "kitty",
+                    "remote": "templates/kitty-colors.conf",
+                    "input": "{templates}/kitty-colors.conf",
+                    "output": "{HOME}/.config/kitty/current-theme.conf",
+                    "post_hook": "killall -USR1 kitty 2>/dev/null || pkill -USR1 kitty 2>/dev/null || true"
+                }
+            ],
+            "toggle": "templateKitty",
+            "note": "Reloads running kitty windows",
+            "remove_hook": "killall -USR1 kitty 2>/dev/null || pkill -USR1 kitty 2>/dev/null || true"
+        },
+        {
+            "id": "alacritty",
+            "title": "Alacritty",
+            "category": "Terminals",
+            "desc": "Alacritty terminal colours",
+            "blocks": [
+                {
+                    "id": "alacritty",
+                    "remote": "templates/alacritty.toml",
+                    "input": "{templates}/alacritty.toml",
+                    "output": "{HOME}/.config/alacritty/colors.toml",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Add import = [\"colors.toml\"]"
+        },
+        {
+            "id": "ghostty",
+            "title": "Ghostty",
+            "category": "Terminals",
+            "desc": "Ghostty terminal colours",
+            "blocks": [
+                {
+                    "id": "ghostty",
+                    "remote": "templates/ghostty",
+                    "input": "{templates}/ghostty",
+                    "output": "{HOME}/.config/ghostty/themes/matugen",
+                    "post_hook": "pkill -SIGUSR2 ghostty 2>/dev/null || true"
+                }
+            ],
+            "toggle": "templateGhostty",
+            "note": "Set theme = \"matugen\" in the config",
+            "remove_hook": "pkill -SIGUSR2 ghostty 2>/dev/null || true"
+        },
+        {
+            "id": "foot",
+            "title": "Foot",
+            "category": "Terminals",
+            "desc": "Foot terminal colours",
+            "blocks": [
+                {
+                    "id": "foot",
+                    "remote": "templates/foot-colors.ini",
+                    "input": "{templates}/foot-colors.ini",
+                    "output": "{HOME}/.config/matugen/generated/foot-colors.ini",
+                    "post_hook": "pkill -SIGUSR1 foot 2>/dev/null; ln -nfs \"{HOME}/.config/matugen/generated/foot-colors.ini\" \"{HOME}/.config/foot/foot-colors.ini\" 2>/dev/null; touch \"{HOME}/.config/foot/foot.ini\" 2>/dev/null || true"
+                }
+            ],
+            "cleanup": [
+                "{HOME}/.config/foot/foot-colors.ini"
+            ],
+            "note": "Add include=~/.config/foot/foot-colors.ini"
+        },
+        {
+            "id": "wezterm",
+            "title": "WezTerm",
+            "category": "Terminals",
+            "desc": "WezTerm terminal colours",
+            "blocks": [
+                {
+                    "id": "wezterm",
+                    "remote": "templates/wezterm_theme.toml",
+                    "input": "{templates}/wezterm_theme.toml",
+                    "output": "{HOME}/.config/wezterm/colors/matugen_theme.toml",
+                    "post_hook": "touch {HOME}/.config/wezterm/wezterm.lua 2>/dev/null || true"
+                }
+            ],
+            "note": "Set color_scheme = \"matugen_theme\"",
+            "remove_hook": "[ -s \"{HOME}/.config/wezterm/wezterm.lua\" ] || rm -f \"{HOME}/.config/wezterm/wezterm.lua\""
+        },
+        {
+            "id": "tmux",
+            "title": "tmux",
+            "category": "Terminals",
+            "desc": "tmux status bar and pane colours",
+            "blocks": [
+                {
+                    "id": "tmux",
+                    "remote": "templates/tmux-colors.conf",
+                    "input": "{templates}/tmux-colors.conf",
+                    "output": "{HOME}/.config/tmux/generated.conf",
+                    "post_hook": "tmux source-file {HOME}/.config/tmux/generated.conf 2>/dev/null || true"
+                }
+            ],
+            "note": "Source generated.conf from tmux.conf"
+        },
+        {
+            "id": "zellij",
+            "title": "Zellij",
+            "category": "Terminals",
+            "desc": "Zellij multiplexer theme",
+            "blocks": [
+                {
+                    "id": "zellij",
+                    "remote": "templates/zellij-theme.kdl.tera",
+                    "input": "{templates}/zellij-theme.kdl.tera",
+                    "output": "{HOME}/.config/zellij/themes/matugen.kdl",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Set theme \"matugen\" in the config"
+        },
+        {
+            "id": "terminal-sequences",
+            "title": "ANSI sequences",
+            "category": "Terminals",
+            "desc": "Exports colours to every open terminal",
+            "blocks": [
+                {
+                    "id": "terminal-sequences",
+                    "remote": "templates/terminal-sequences",
+                    "input": "{templates}/terminal-sequences",
+                    "output": "{HOME}/.cache/terminal-sequences",
+                    "post_hook": "tee /dev/pts/[0-9]* < {HOME}/.cache/terminal-sequences >/dev/null 2>&1 || true"
+                }
+            ],
+            "note": "Add the cat snippet to a profile script"
+        },
+        {
+            "id": "mcfly",
+            "title": "McFly",
+            "category": "Terminals",
+            "desc": "McFly shell history colours",
+            "blocks": [
+                {
+                    "id": "mcfly",
+                    "remote": "templates/mcfly.toml",
+                    "input": "{templates}/mcfly.toml",
+                    "output": "{HOME}/.local/share/mcfly/config.toml",
+                    "post_hook": ""
+                }
+            ]
+        },
+        {
+            "id": "neovim",
+            "title": "Neovim (lua)",
+            "category": "Editors & tools",
+            "desc": "Semantic palette for matugen.nvim",
+            "blocks": [
+                {
+                    "id": "neovim",
+                    "remote": "templates/neovim/template.lua",
+                    "input": "{templates}/neovim.lua",
+                    "output": "{HOME}/.config/nvim/lua/matugen.lua",
+                    "post_hook": "pkill -SIGUSR1 nvim 2>/dev/null || true"
+                }
+            ],
+            "toggle": "templateNeovim",
+            "note": "Requires the matugen.nvim plugin"
+        },
+        {
+            "id": "nvim",
+            "title": "Neovim (vim colours)",
+            "category": "Editors & tools",
+            "desc": "Plain Vimscript colourscheme",
+            "blocks": [
+                {
+                    "id": "nvim",
+                    "remote": "templates/nvim-colors.vim",
+                    "input": "{templates}/nvim-colors.vim",
+                    "output": "{HOME}/.config/nvim/colors/matugen.vim",
+                    "post_hook": "pkill -SIGUSR1 nvim 2>/dev/null || true"
+                }
+            ],
+            "note": "Add colorscheme matugen to init.vim/lua"
+        },
+        {
+            "id": "helix",
+            "title": "Helix",
+            "category": "Editors & tools",
+            "desc": "Helix editor theme",
+            "blocks": [
+                {
+                    "id": "helix",
+                    "remote": "templates/helix.toml",
+                    "input": "{templates}/helix.toml",
+                    "output": "{HOME}/.config/helix/themes/matugen.toml",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Set theme = \"matugen\" in config.toml"
+        },
+        {
+            "id": "micro",
+            "title": "Micro",
+            "category": "Editors & tools",
+            "desc": "Micro editor colourscheme",
+            "blocks": [
+                {
+                    "id": "micro",
+                    "remote": "templates/micro.micro",
+                    "input": "{templates}/micro.micro",
+                    "output": "{HOME}/.config/micro/colorschemes/matugen.micro",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Run set colorscheme matugen in micro"
+        },
+        {
+            "id": "vscode",
+            "title": "VS Code",
+            "category": "Editors & tools",
+            "desc": "VS Code / VSCodium theme",
+            "blocks": [
+                {
+                    "id": "vscode-raw",
+                    "remote": "templates/vscode-colors",
+                    "input": "{templates}/vscode-colors",
+                    "output": "{HOME}/.cache/matugen/vscode-colors",
+                    "post_hook": ""
+                },
+                {
+                    "id": "vscode-json",
+                    "remote": "templates/vscode-colors.json",
+                    "input": "{templates}/vscode-colors.json",
+                    "output": "{HOME}/.cache/matugen/vscode-colors.json",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateVscode",
+            "note": "Install the Matugen Theme extension"
+        },
+        {
+            "id": "zed",
+            "title": "Zed",
+            "category": "Editors & tools",
+            "desc": "Zed editor theme",
+            "blocks": [
+                {
+                    "id": "zed",
+                    "remote": "templates/zed-colors.json",
+                    "input": "{templates}/zed-colors.json",
+                    "output": "{HOME}/.config/zed/themes/matugen.json",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Select Matugen under theme family"
+        },
+        {
+            "id": "opencode",
+            "title": "OpenCode",
+            "category": "Editors & tools",
+            "desc": "OpenCode terminal agent theme",
+            "blocks": [
+                {
+                    "id": "opencode",
+                    "remote": "templates/opencode-colors.json",
+                    "input": "{templates}/opencode.json",
+                    "output": "{HOME}/.config/opencode/themes/matugen.json",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateOpencode",
+            "note": "Pick matugen with /theme"
+        },
+        {
+            "id": "aerc",
+            "title": "Aerc",
+            "category": "Editors & tools",
+            "desc": "Aerc mail client styleset",
+            "blocks": [
+                {
+                    "id": "aerc",
+                    "remote": "templates/aerc",
+                    "input": "{templates}/aerc",
+                    "output": "{HOME}/.config/aerc/stylesets/matugen",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Set styleset-name=matugen in aerc.conf"
+        },
+        {
+            "id": "television",
+            "title": "Television",
+            "category": "Editors & tools",
+            "desc": "Television fuzzy finder theme",
+            "blocks": [
+                {
+                    "id": "television",
+                    "remote": "templates/television.toml",
+                    "input": "{templates}/television.toml",
+                    "output": "{HOME}/.config/television/themes/matugen.toml",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Set theme = \"matugen\" in config.toml"
+        },
+        {
+            "id": "yazi",
+            "title": "Yazi",
+            "category": "Editors & tools",
+            "desc": "Yazi file manager theme",
+            "blocks": [
+                {
+                    "id": "yazi",
+                    "remote": "templates/yazi-theme.toml",
+                    "input": "{templates}/yazi-theme.toml",
+                    "output": "{HOME}/.config/yazi/theme.toml",
+                    "post_hook": ""
+                }
+            ]
+        },
+        {
+            "id": "clipse",
+            "title": "Clipse",
+            "category": "Editors & tools",
+            "desc": "Clipse clipboard manager theme",
+            "blocks": [
+                {
+                    "id": "clipse",
+                    "remote": "templates/clipse_theme.json",
+                    "input": "{templates}/clipse_theme.json",
+                    "output": "{HOME}/.config/clipse/custom_theme.json",
+                    "post_hook": ""
+                }
+            ]
+        },
+        {
+            "id": "zathura",
+            "title": "Zathura",
+            "category": "Editors & tools",
+            "desc": "Zathura document viewer colours",
+            "blocks": [
+                {
+                    "id": "zathura",
+                    "remote": "templates/zathura-colors",
+                    "input": "{templates}/zathura-colors",
+                    "output": "{HOME}/.config/zathura/zathurarc",
+                    "post_hook": ""
+                }
+            ]
+        },
+        {
+            "id": "btop",
+            "title": "btop",
+            "category": "Editors & tools",
+            "desc": "btop++ resource monitor theme",
+            "blocks": [
+                {
+                    "id": "btop",
+                    "remote": "templates/btop.theme",
+                    "input": "{templates}/btop.theme",
+                    "output": "{HOME}/.config/btop/themes/matugen.theme",
+                    "post_hook": "sed -i -E 's/^color_theme *= *\".*\"/color_theme = \"matugen\"/; s/^theme_background *= *.*/theme_background = False/' {HOME}/.config/btop/btop.conf 2>/dev/null; pkill -USR2 btop 2>/dev/null || true"
+                }
+            ],
+            "toggle": "templateBtop",
+            "note": "Selects the matugen theme automatically",
+            "remove_hook": "sed -i -E 's/^color_theme *= *\".*\"/color_theme = \"Default\"/' {HOME}/.config/btop/btop.conf 2>/dev/null; pkill -USR2 btop 2>/dev/null || true"
+        },
+        {
+            "id": "obs",
+            "title": "OBS Studio",
+            "category": "Apps & media",
+            "desc": "OBS theme (native and Flatpak)",
+            "blocks": [
+                {
+                    "id": "obs",
+                    "remote": "templates/matugen.obt",
+                    "input": "{templates}/matugen.obt",
+                    "output": "{HOME}/.var/app/com.obsproject.Studio/config/obs-studio/themes/matugen.obt",
+                    "post_hook": ""
+                },
+                {
+                    "id": "obs-native",
+                    "remote": "templates/matugen.obt",
+                    "input": "{templates}/matugen.obt",
+                    "output": "{HOME}/.config/obs-studio/themes/matugen.obt",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateObs",
+            "note": "Pick the Matugen theme in OBS"
+        },
+        {
+            "id": "prismlauncher",
+            "title": "PrismLauncher",
+            "category": "Apps & media",
+            "desc": "Minecraft launcher theme",
+            "blocks": [
+                {
+                    "id": "prismlauncher",
+                    "remote": "templates/prismlauncher.json",
+                    "input": "{templates}/prismlauncher.json",
+                    "output": "{HOME}/.local/share/PrismLauncher/themes/Matugen/theme.json",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templatePrismlauncher",
+            "note": "Pick Matugen in Appearance settings"
+        },
+        {
+            "id": "rmpc",
+            "title": "rmpc",
+            "category": "Apps & media",
+            "desc": "Music player client theme",
+            "blocks": [
+                {
+                    "id": "rmpc",
+                    "remote": "templates/rmpc/rmpc.ron",
+                    "input": "{templates}/rmpc.ron",
+                    "output": "{HOME}/.config/rmpc/themes/matugen.ron",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Set theme: Some(\"matugen\") in config.ron"
+        },
+        {
+            "id": "cava",
+            "title": "Cava",
+            "category": "Apps & media",
+            "desc": "Audio visualizer gradient",
+            "blocks": [
+                {
+                    "id": "cava",
+                    "remote": "templates/cava-colors.ini",
+                    "input": "{templates}/cava-colors.ini",
+                    "output": "{HOME}/.config/cava/themes/matugen",
+                    "post_hook": "pkill -USR1 cava 2>/dev/null || true"
+                }
+            ],
+            "note": "Set theme = 'matugen' in cava config"
+        },
+        {
+            "id": "spicetify",
+            "title": "Spicetify (Sleek)",
+            "category": "Apps & media",
+            "desc": "Spotify Sleek theme colours",
+            "blocks": [
+                {
+                    "id": "spotify",
+                    "remote": "templates/spicetify.ini",
+                    "input": "{templates}/spicetify.ini",
+                    "output": "{HOME}/.config/spicetify/Themes/Sleek/color.ini",
+                    "post_hook": "pgrep -x spicetify >/dev/null || spicetify apply -n 2>/dev/null || true"
+                }
+            ],
+            "note": "Set color_scheme = matugen in config-xpui.ini",
+            "remove_hook": "spicetify apply -n 2>/dev/null || true"
+        },
+        {
+            "id": "steam",
+            "title": "Steam (AdwSteamGtk)",
+            "category": "Apps & media",
+            "desc": "Steam client recolouring",
+            "blocks": [
+                {
+                    "id": "steam",
+                    "remote": "templates/steam.css",
+                    "input": "{templates}/steam.css",
+                    "output": "{HOME}/.config/AdwSteamGtk/custom.css",
+                    "post_hook": "adwaita-steam-gtk -i 2>/dev/null || true"
+                }
+            ],
+            "note": "Enable Custom CSS in AdwSteamGtk",
+            "remove_hook": "adwaita-steam-gtk -i 2>/dev/null || true"
+        },
+        {
+            "id": "ghostwriter",
+            "title": "Ghostwriter",
+            "category": "Apps & media",
+            "desc": "Markdown editor theme",
+            "blocks": [
+                {
+                    "id": "ghostwriter",
+                    "remote": "templates/ghostwriter.json",
+                    "input": "{templates}/ghostwriter.json",
+                    "output": "{HOME}/.local/share/ghostwriter/themes/Matugen.json",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Select Matugen as the theme in Ghostwriter"
+        },
+        {
+            "id": "vesktop-midnight",
+            "title": "Discord \u2014 Midnight",
+            "category": "Apps & media",
+            "desc": "Midnight Discord theme for Vesktop",
+            "blocks": [
+                {
+                    "id": "vesktop-midnight",
+                    "remote": "templates/midnight-discord.css",
+                    "input": "{templates}/midnight-discord.css",
+                    "output": "{HOME}/.config/vesktop/themes/midnight-discord.css",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateVesktop",
+            "note": "Enable the theme in Vencord"
+        },
+        {
+            "id": "vesktop-system24",
+            "title": "Discord \u2014 system24",
+            "category": "Apps & media",
+            "desc": "system24 theme for Vesktop",
+            "blocks": [
+                {
+                    "id": "vesktop-system24",
+                    "remote": "templates/system24.css",
+                    "input": "{templates}/system24.css",
+                    "output": "{HOME}/.config/vesktop/themes/system24.css",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateVesktop",
+            "note": "Enable the theme in Vencord"
+        },
+        {
+            "id": "telegram",
+            "title": "Telegram",
+            "category": "Apps & media",
+            "desc": "Telegram desktop theme file",
+            "blocks": [
+                {
+                    "id": "",
+                    "remote": "templates/telegram.tdesktop-theme",
+                    "input": "{templates}/telegram.tdesktop-theme",
+                    "output": "",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Drag the file into a Telegram chat to apply"
+        },
+        {
+            "id": "heroic",
+            "title": "Heroic Games Launcher",
+            "category": "Apps & media",
+            "desc": "Heroic CSS theme file",
+            "blocks": [
+                {
+                    "id": "",
+                    "remote": "templates/heroic.css",
+                    "input": "{templates}/heroic.css",
+                    "output": "",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Select matugen.css as custom theme"
+        },
+        {
+            "id": "obsidian",
+            "title": "Obsidian",
+            "category": "Apps & media",
+            "desc": "Obsidian CSS snippet",
+            "blocks": [
+                {
+                    "id": "",
+                    "remote": "templates/obsidian.css",
+                    "input": "{templates}/obsidian.css",
+                    "output": "",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Copy into <vault>/.obsidian/snippets and enable"
+        },
+        {
+            "id": "firefox",
+            "title": "Firefox",
+            "category": "Browsers",
+            "desc": "Firefox chrome colours",
+            "blocks": [
+                {
+                    "id": "firefox",
+                    "remote": "templates/firefox-colors.css",
+                    "input": "{templates}/firefox-colors.css",
+                    "output": "{HOME}/.mozilla/firefox/default/chrome/matugen.css",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templateFirefox",
+            "note": "Check the profile path in userContent.css"
+        },
+        {
+            "id": "pywalfox",
+            "title": "Pywalfox",
+            "category": "Browsers",
+            "desc": "Firefox / Thunderbird via pywalfox",
+            "blocks": [
+                {
+                    "id": "pywalfox",
+                    "remote": "templates/pywalfox-colors.json",
+                    "input": "{templates}/pywalfox-colors.json",
+                    "output": "{HOME}/.cache/wal/colors.json",
+                    "post_hook": "pywalfox update 2>/dev/null || true"
+                }
+            ],
+            "note": "Install the pywalfox browser add-on"
+        },
+        {
+            "id": "zen",
+            "title": "Zen Browser",
+            "category": "Browsers",
+            "desc": "userChrome and userContent CSS files",
+            "blocks": [
+                {
+                    "id": "",
+                    "remote": "templates/zen-userchrome.css",
+                    "input": "{templates}/zen-userchrome.css",
+                    "output": "",
+                    "post_hook": ""
+                },
+                {
+                    "id": "",
+                    "remote": "templates/zen-usercontent.css",
+                    "input": "{templates}/zen-usercontent.css",
+                    "output": "",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Copy into <profile>/chrome (manual profile path)"
+        },
+        {
+            "id": "vivaldi",
+            "title": "Vivaldi",
+            "category": "Browsers",
+            "desc": "Vivaldi custom UI CSS",
+            "blocks": [
+                {
+                    "id": "",
+                    "remote": "templates/vivaldi.css",
+                    "input": "{templates}/vivaldi.css",
+                    "output": "",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Enable CSS modifications and pick the folder"
+        },
+        {
+            "id": "dunst",
+            "title": "Dunst",
+            "category": "Notifications & launchers",
+            "desc": "Dunst notification daemon",
+            "blocks": [
+                {
+                    "id": "dunst",
+                    "remote": "templates/dunstrc-colors",
+                    "input": "{templates}/dunstrc-colors",
+                    "output": "{HOME}/.config/dunst/dunstrc",
+                    "post_hook": "dunstctl reload 2>/dev/null || true"
+                }
+            ],
+            "note": "Rewrites the full dunstrc",
+            "remove_hook": "dunstctl reload 2>/dev/null || true"
+        },
+        {
+            "id": "mako",
+            "title": "Mako",
+            "category": "Notifications & launchers",
+            "desc": "Mako notification daemon",
+            "blocks": [
+                {
+                    "id": "mako",
+                    "remote": "templates/mako",
+                    "input": "{templates}/mako",
+                    "output": "{HOME}/.config/mako/mako-colors",
+                    "post_hook": "makoctl reload 2>/dev/null || true"
+                }
+            ],
+            "note": "Add include=~/.config/mako/mako-colors",
+            "remove_hook": "makoctl reload 2>/dev/null || true"
+        },
+        {
+            "id": "swaync",
+            "title": "SwayNC",
+            "category": "Notifications & launchers",
+            "desc": "Sway notification centre",
+            "blocks": [
+                {
+                    "id": "swaync",
+                    "remote": "templates/colors.css",
+                    "input": "{templates}/swaync-colors.css",
+                    "output": "{HOME}/.config/swaync/colors.css",
+                    "post_hook": "swaync-client -rs 2>/dev/null || true"
+                }
+            ],
+            "note": "Add @import \"colors.css\" to style.css",
+            "remove_hook": "swaync-client -rs 2>/dev/null || true"
+        },
+        {
+            "id": "rofi",
+            "title": "Rofi",
+            "category": "Notifications & launchers",
+            "desc": "Rofi launcher colours",
+            "blocks": [
+                {
+                    "id": "rofi",
+                    "remote": "templates/rofi-colors.rasi",
+                    "input": "{templates}/rofi-colors.rasi",
+                    "output": "{HOME}/.config/rofi/colors.rasi",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Add @import \"colors.rasi\" to config.rasi"
+        },
+        {
+            "id": "fuzzel",
+            "title": "Fuzzel",
+            "category": "Notifications & launchers",
+            "desc": "Fuzzel launcher colours",
+            "blocks": [
+                {
+                    "id": "fuzzel",
+                    "remote": "templates/fuzzel.ini",
+                    "input": "{templates}/fuzzel.ini",
+                    "output": "{HOME}/.config/fuzzel/colors.ini",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Add include = \"~/.config/fuzzel/colors.ini\""
+        },
+        {
+            "id": "wofi",
+            "title": "Wofi",
+            "category": "Notifications & launchers",
+            "desc": "Wofi launcher colours",
+            "blocks": [
+                {
+                    "id": "wofi",
+                    "remote": "templates/colors.css",
+                    "input": "{templates}/wofi-colors.css",
+                    "output": "{HOME}/.config/wofi/colors.css",
+                    "post_hook": ""
+                }
+            ],
+            "note": "Add @import \"colors.css\" to style.css"
+        }
+    ]
+}

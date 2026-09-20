@@ -3,8 +3,8 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 import QtQuick.Templates
-import "../../themes"
-import "../../ui" as Ui
+import "../../../style/themes"
+import "../../../style/ui" as Ui
 
 // NexusControls — 1:1 port of the Caelestia Nexus settings kit
 // (caelestia-dots/shell modules/nexus/common + components/controls) onto the
@@ -246,6 +246,7 @@ QtObject {
         property string icon: ""
         property color tint: Theme.accent
         property bool checked: false
+        property bool disabled: false
         property bool first: false
         property bool last: false
         signal toggled(bool next)
@@ -261,6 +262,7 @@ QtObject {
         Ui.StateLayer {
             id: rowMouse
             showHoverBackground: false
+            disabled: root.disabled
             radius: 28
             color: Theme.textPrimary
             onClicked: root.toggled(!root.checked)
@@ -299,6 +301,7 @@ QtObject {
                 id: sw
                 anchors.verticalCenter: parent.verticalCenter
                 checked: root.checked
+                disabled: root.disabled
                 onToggled: n => root.toggled(n)
             }
         }
@@ -963,6 +966,7 @@ QtObject {
         property string text: ""
         property string subtext: ""
         property bool showChevron: true
+        property bool disabled: false
         property bool first: false
         property bool last: false
         signal clicked(var event)
@@ -980,6 +984,7 @@ QtObject {
             anchors.leftMargin: 20
             anchors.rightMargin: 20
             spacing: 12
+            opacity: root.disabled ? 0.5 : 1
             Text {
                 id: iconText
                 visible: root.icon.length > 0
@@ -1024,7 +1029,7 @@ QtObject {
                 antialiasing: Theme.textAa
             }
         }
-        Ui.StateLayer { id: navMouse; showHoverBackground: false; radius: 28; color: Theme.textPrimary; onClicked: e => root.clicked(e) }
+        Ui.StateLayer { id: navMouse; showHoverBackground: false; disabled: root.disabled; radius: 28; color: Theme.textPrimary; onClicked: e => root.clicked(e) }
     }
 
     // Nexus ButtonBase.Text: tonal pill with radius morph + shapeMorph ripple.
@@ -1156,7 +1161,8 @@ QtObject {
                 Rectangle {
                     visible: root.showBack
                     width: 40; height: 40
-                    radius: backMouse.pressed ? 8 : 20
+                    // M3E shape morph: circle at rest, rounded square while hovered.
+                    radius: backMouse.containsMouse ? 12 : 20
                     color: Theme.panelCardHigh
                     antialiasing: Theme.shapesAa
                     Behavior on radius { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
@@ -1168,7 +1174,7 @@ QtObject {
                         antialiasing: Theme.textAa
                         renderType: Theme.textRenderType
                     }
-                    Ui.StateLayer { id: backMouse; radius: 20; color: Theme.textPrimary; onClicked: root.backRequested() }
+                    Ui.StateLayer { id: backMouse; radius: parent.radius; color: Theme.textPrimary; onClicked: root.backRequested() }
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter

@@ -1,14 +1,15 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
-import "../../../themes"
-import "../../../ui" as Ui
+import "../../../../style/themes"
+import "../../../../style/ui" as Ui
 import ".."
 
 // Setup — quick access to the tools that configure the session.
-// Date & Time, Language & Region, Keybinds and Update live on their own
-// in-page sub-views (round back row), like PanelsPage; in compact mode the
-// panel's header back returns to the category list from the main view only.
+// Date & Time, Language & Region, Keybinds, Experimental and Update live on
+// their own in-page sub-views (round back row), like PanelsPage; in compact
+// mode the panel's header back returns to the category list from the main
+// view only.
 NexusControls.PageBase {
     id: root
     title: "Setup"
@@ -17,11 +18,13 @@ NexusControls.PageBase {
     // shortcuts inhibitor (key capture must not trigger Umbriel's own binds).
     property var hostWindow: null
 
-    // Sub-view state: "" (main), "datetime", "language", "keybinds" or "update".
+    // Sub-view state: "" (main), "datetime", "language", "keybinds",
+    // "experimental" or "update".
     property string view: ""
     readonly property string viewTitle: root.view === "datetime" ? "Date & Time"
         : root.view === "language" ? "Language & Region"
-        : root.view === "keybinds" ? "Keybinds" : "Update"
+        : root.view === "keybinds" ? "Keybinds"
+        : root.view === "experimental" ? "Experimental" : "Update"
     function back(): void { root.view = "" }
 
     // ---- main ------------------------------------------------------------
@@ -46,11 +49,18 @@ NexusControls.PageBase {
     NexusControls.NavRow {
         visible: root.view === ""
         first: true
-        last: true
         icon: "󰌌"
         text: "Keybinds"
         subtext: "Shell actions and compositor shortcuts"
         onClicked: root.view = "keybinds"
+    }
+    NexusControls.NavRow {
+        visible: root.view === ""
+        last: true
+        icon: "󰂓"
+        text: "Experimental"
+        subtext: "Renderer backend and other opt-in features"
+        onClicked: root.view = "experimental"
     }
     NexusControls.SectionHeader { visible: root.view === ""; text: "Maintenance" }
     NexusControls.NavRow {
@@ -76,9 +86,11 @@ NexusControls.PageBase {
             Rectangle {
                 width: 40
                 height: 40
-                radius: 20
+                // M3E shape morph: circle at rest, rounded square while hovered.
+                radius: backMouse.containsMouse ? 12 : 20
                 color: backMouse.containsMouse ? Theme.panelCardHighest : Theme.panelCardHigh
                 antialiasing: Theme.shapesAa
+                Behavior on radius { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
                 Text {
                     anchors.centerIn: parent
                     text: "‹"
@@ -87,7 +99,7 @@ NexusControls.PageBase {
                     antialiasing: Theme.textAa
                     renderType: Theme.textRenderType
                 }
-                Ui.StateLayer { id: backMouse; radius: 20; color: Theme.textPrimary; onClicked: root.back() }
+                Ui.StateLayer { id: backMouse; radius: parent.radius; color: Theme.textPrimary; onClicked: root.back() }
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -138,15 +150,27 @@ NexusControls.PageBase {
         KeybindsPage { showTitle: false; hostWindow: root.hostWindow }
     }
 
+    // ---- experimental ----------------------------------------------------
+    Loader {
+        visible: root.view === "experimental"
+        width: parent.width
+        asynchronous: false
+        sourceComponent: root.view === "experimental" ? experimentalComp : null
+    }
+    Component {
+        id: experimentalComp
+        ExperimentalPage { showTitle: false }
+    }
+
     // ---- update ----------------------------------------------------------
     NexusControls.NavRow {
         visible: root.view === "update"
         first: true
         icon: "󰚰"
         text: "Shell update"
-        subtext: "Reinstall from GitHub, keeping config/"
+        subtext: "Reinstall from GitHub, keeping backend/config/"
         onClicked: Quickshell.execDetached(["bash", "-c",
-            "kitty --class solstice-shell-update --title \"Shell Update\" bash -lc 'bash \"$HOME/.config/quickshell/solstice/scripts/update-shell.sh\"; echo; echo \"--- Done ---\"; read -n1 -s' &"])
+            "kitty --class solstice-shell-update --title \"Shell Update\" bash -lc 'bash \"$HOME/.config/quickshell/solstice/backend/scripts/update-shell.sh\"; echo; echo \"--- Done ---\"; read -n1 -s' &"])
     }
     NexusControls.NavRow {
         visible: root.view === "update"
@@ -159,6 +183,6 @@ NexusControls.PageBase {
 
     NexusControls.Note {
         visible: root.view === "update"
-        text: "The shell update clones the latest version over the install and keeps config/ and themes/snapshots/."
+        text: "The shell update clones the latest version over the install and keeps backend/config/ and style/themes/snapshots/."
     }
 }

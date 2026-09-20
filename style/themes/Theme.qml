@@ -2,13 +2,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "app_glyphs.js" as AppGlyphs
 
 Singleton {
     id: root
 
     FileView {
         id: colorFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/themes/matugen.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/style/themes/matugen.json"
         printErrors: false; watchChanges: true; blockLoading: true
         onFileChanged: colorReloadDebounce.restart()
         adapter: JsonAdapter {
@@ -163,14 +164,17 @@ Singleton {
 
     FileView {
         id: fontFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/font_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/font_settings.json"
         watchChanges: true; onFileChanged: debouncedReload(fontFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property string fontFamily: "Adwaita Sans"; property int fontSize: 11 }
     }
     readonly property string fontFamily: (fontFile.adapter.fontFamily && fontFile.adapter.fontFamily.length > 0) ? fontFile.adapter.fontFamily : "Adwaita Sans"
     readonly property string iconFontFamily: "JetBrainsMono Nerd Font"
+    // Variable glyph font for the bar's workspace window icons, installed
+    // user-level by backend/scripts/ensure-symbol-font.sh.
+    readonly property string glyphFontFamily: "Material Symbols Rounded"
     // Colour emoji for the launcher emoji picker (installed user-level by
-    // scripts/ensure-emoji-font.sh). Named explicitly so glyphs never fall
+    // backend/scripts/ensure-emoji-font.sh). Named explicitly so glyphs never fall
     // back to a monochrome face; Qt's fontconfig fallback covers systems
     // with a different colour emoji font.
     readonly property string emojiFontFamily: "Noto Color Emoji"
@@ -188,7 +192,7 @@ Singleton {
         if (fontApplyProc.running) return
         let p = _fontApplyPending
         _fontApplyPending = null
-        let script = Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/apply-font.sh"
+        let script = Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/scripts/apply-font.sh"
         fontApplyProc.command = ["bash", script, p.family, p.size]
         fontApplyProc.running = true
     }
@@ -211,14 +215,17 @@ Singleton {
 
     FileView {
         id: shellFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/topbar_settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/topbar_settings.json"
         watchChanges: true; onFileChanged: debouncedReload(shellFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
-            property int radius: 0
+            property int radius: 20
             property bool animationsEnabled: true
+            property bool motionFluid: true
             property real animationSpeed: 1.0
             property string clockPosition: "center"
             property string clockFormat: "full"
+            property bool clockIcon: true
+            property bool clockIconBackground: true
             property string workspacesPosition: "left"
             // Caelestia bar.workspaces settings (ported 1:1 where Umbriel
             // allows). displayType replaces the old workspaceStyle.
@@ -227,6 +234,7 @@ Singleton {
             property bool workspaceActiveIndicator: true
             property bool workspaceActiveTrail: true
             property bool workspaceOccupiedBg: false
+            property bool workspaceLauncherSync: true
             property bool workspaceShowUnoccupied: true
             property bool workspacePerMonitor: true
             property bool workspaceShowWindows: true
@@ -234,7 +242,13 @@ Singleton {
             property var workspaceIgnoredTags: ["hide_in_bar", "xwl_popup"]
             property int workspaceSpacing: 4
             property real workspaceScale: 1.0
+            // Window glyphs (Workspaces + Active window): symbol-font
+            // category glyphs instead of themed app-icon images.
+            property bool glyphWindowIcons: true
+            // Random M3 expressive shape behind the active window's icon.
+            property bool iconBackground: true
             property int thickness: 30
+            property int moduleSize: 0
             property real opacity: 1.0
             property string position: "top"
             property bool textBold: false
@@ -287,7 +301,7 @@ Singleton {
     }
     // Shell rounding (Global > Rounding). Single source for all shell
     // radii; synced to Umbriel window rounding by the Global slider.
-    readonly property int cornerRadius: Math.max(0, Math.min(40, Math.round(shellFile.adapter.radius ?? 0)))
+    readonly property int cornerRadius: Math.max(0, Math.min(40, Math.round(shellFile.adapter.radius ?? 20)))
     readonly property int cornerRadiusSmall: Math.max(0, Math.min(12, Math.round(cornerRadius * 0.6)))
     function setCornerRadius(v: int): void { setAdapterInt(shellFile, "radius", v, 0, 40) }
     readonly property int barThickness: Math.max(20, Math.min(48, Math.round(shellFile.adapter.thickness !== undefined ? shellFile.adapter.thickness : 30)))
@@ -311,6 +325,12 @@ Singleton {
     }
     readonly property bool animationsEnabled: shellFile.adapter.animationsEnabled
     function setAnimationsEnabled(v: bool): void { setAdapterBool(shellFile, "animationsEnabled", v) }
+    // Fluid motion (Global > Animations, default on): spatial curves carry
+    // little to no overshoot and level off earlier, so the animation tail is
+    // not spent in sub-pixel bounce — the part that reads as stutter with
+    // VSync off. Off restores the expressive Caelestia overshoot curves.
+    readonly property bool motionFluid: shellFile.adapter.motionFluid ?? true
+    function setMotionFluid(v: bool): void { setAdapterBool(shellFile, "motionFluid", v) }
     // Global animation speed multiplier (Global > Animations). 1.0 = token
     // durations as specified; 2.0 plays them twice as fast. All duration
     // tokens below route through animMs() so one value drives every
@@ -339,6 +359,14 @@ Singleton {
         let i = clockFormats.indexOf(clockFormat)
         setClockFormat(clockFormats[(i + 1) % clockFormats.length])
     }
+    // Caelestia's bar clock icon (Material Symbols "calendar_month") drawn
+    // in front of the date/time column. Toggled in Setup > Clock.
+    readonly property bool clockIcon: shellFile.adapter.clockIcon !== false
+    function setClockIcon(v: bool): void { setAdapterBool(shellFile, "clockIcon", v) }
+    // Random M3 expressive shape behind the clock icon (same treatment as
+    // the active window's icon box). Toggled in Setup > Clock.
+    readonly property bool clockIconBackground: shellFile.adapter.clockIconBackground !== false
+    function setClockIconBackground(v: bool): void { setAdapterBool(shellFile, "clockIconBackground", v) }
     readonly property string workspacesPosition: (shellFile.adapter.workspacesPosition === "center" || shellFile.adapter.workspacesPosition === "right") ? shellFile.adapter.workspacesPosition : "left"
 
     // ---- Workspaces (Caelestia bar.workspaces port) ----
@@ -360,6 +388,11 @@ Singleton {
     function setWorkspaceActiveTrail(v: bool): void { setAdapterBool(shellFile, "workspaceActiveTrail", v) }
     readonly property bool workspaceOccupiedBg: shellFile.adapter.workspaceOccupiedBg === true
     function setWorkspaceOccupiedBg(v: bool): void { setAdapterBool(shellFile, "workspaceOccupiedBg", v) }
+    // Launcher button sync (Settings -> Panels -> Taskbar -> Workspaces >
+    // Launcher button sync, only while Background is on): the launcher's card
+    // mirrors the workspaces card instead of using its own entry.
+    readonly property bool workspaceLauncherSync: shellFile.adapter.workspaceLauncherSync !== false
+    function setWorkspaceLauncherSync(v: bool): void { setAdapterBool(shellFile, "workspaceLauncherSync", v) }
     readonly property bool workspaceShowUnoccupied: shellFile.adapter.workspaceShowUnoccupied !== false
     function setWorkspaceShowUnoccupied(v: bool): void { setAdapterBool(shellFile, "workspaceShowUnoccupied", v) }
     readonly property bool workspacePerMonitor: shellFile.adapter.workspacePerMonitor !== false
@@ -385,6 +418,10 @@ Singleton {
     function setWorkspaceSpacing(v: int): void { setAdapterInt(shellFile, "workspaceSpacing", v, 0, 24) }
     readonly property real workspaceScale: Math.max(0.5, Math.min(2.0, shellFile.adapter.workspaceScale ?? 1.0))
     function setWorkspaceScale(v: real): void { setAdapterReal(shellFile, "workspaceScale", v, 0.5, 2.0) }
+    readonly property bool glyphWindowIcons: shellFile.adapter.glyphWindowIcons !== false
+    function setGlyphWindowIcons(v: bool): void { setAdapterBool(shellFile, "glyphWindowIcons", v) }
+    readonly property bool iconBackground: shellFile.adapter.iconBackground !== false
+    function setIconBackground(v: bool): void { setAdapterBool(shellFile, "iconBackground", v) }
     readonly property bool textBold: !!shellFile.adapter.textBold
     function setTextBold(v: bool): void { setAdapterBool(shellFile, "textBold", v) }
     // Bar labels sit one step above Normal (Google Sans Flex reads better
@@ -421,7 +458,16 @@ Singleton {
     // Uniform taskbar module-card extent (2px inset per bar side): every
     // Background card renders at this cross-axis size regardless of module
     // content metrics, so the bar reads as one row of identical pills.
-    readonly property int barCardExtent: Math.max(12, Math.round(Math.min(barEffectiveWidth, barEffectiveHeight) - 4))
+    // `moduleSize` pins the extent explicitly; 0 keeps thickness − 4. The
+    // explicit value is capped to the bar's cross axis (2px inset per side)
+    // so a card can never paint outside the bar surface.
+    readonly property int barModuleSize: Math.max(0, Math.min(64, Math.round(shellFile.adapter.moduleSize !== undefined ? shellFile.adapter.moduleSize : 0)))
+    function setBarModuleSize(v: int): void { setAdapterInt(shellFile, "moduleSize", v, 0, 64) }
+    readonly property int barCardExtent: {
+        const cross = Math.round(Math.min(barEffectiveWidth, barEffectiveHeight))
+        if (barModuleSize > 0) return Math.max(12, Math.min(barModuleSize, cross - 2))
+        return Math.max(12, cross - 4)
+    }
     property var barAnchors: ({})
     property var _pendingAnchors: ({})
     property bool _anchorFlushScheduled: false
@@ -658,10 +704,28 @@ Singleton {
         try { _appIconCache[low] = out } catch (e3) {}
         return out
     }
+    // Window glyph for the workspace module: class rules first, then the
+    // app's freedesktop categories, then the caller's fallback. Name-only
+    // lookup (no icon path), so results stay valid across icon themes.
+    function appGlyphFor(appId: string, fallback: string): string {
+        let needle = (appId || "").trim()
+        let rule = AppGlyphs.matchIconRuleList(needle, AppGlyphs.windowIconRules)
+        if (rule.length > 0) return rule
+        let e = null
+        try { e = desktopEntryFor(needle) } catch (err) {}
+        return AppGlyphs.categoryGlyph(e ? e.categories : null, fallback ? fallback : "terminal")
+    }
+
+    // Glyph of the settings page currently open. The settings app is a
+    // regular toplevel of this shell (app id org.quickshell, title Settings);
+    // SettingsPanel publishes the active nav entry's icon here so the
+    // workspace module can draw that window with the icon of the page it
+    // shows. Empty when the app has not reported a page yet.
+    property string settingsAppIcon: ""
 
     FileView {
         id: dndFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/dnd.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/dnd.json"
         watchChanges: true; onFileChanged: debouncedReload(dndFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property bool enabled: false }
     }
@@ -671,7 +735,7 @@ Singleton {
 
     FileView {
         id: gamemodeFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/gamemode.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/gamemode.json"
         watchChanges: true; onFileChanged: debouncedReload(gamemodeFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property bool enabled: false }
     }
@@ -679,9 +743,40 @@ Singleton {
     function setGamemodeEnabled(v: bool): void { setAdapterBool(gamemodeFile, "enabled", v) }
     function toggleGamemode(): void { setGamemodeEnabled(!gamemodeEnabled) }
 
+    // Debug switches (Experimental page). Off by default so the shell pays
+    // nothing unless a debugging surface is explicitly wanted. fpsCap is read
+    // by backend/scripts/solstice at boot (the QSG_* pacing env vars only
+    // take effect before Qt initializes) — the page restarts the shell after
+    // changing it.
+    FileView {
+        id: debugFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/debug.json"
+        watchChanges: true; onFileChanged: debouncedReload(debugFile); blockLoading: true; printErrors: false
+        adapter: JsonAdapter {
+            property bool fpsOverlay: false
+            property string fpsCap: "display"
+        }
+    }
+    readonly property bool debugFpsEnabled: !!debugFile.adapter.fpsOverlay
+    // "60" (fixed-step software cap) or "display" (hard cap at the output's
+    // highest refresh rate). Legacy values map true/"uncapped" -> no cap
+    // handling needed: true = "60", everything else = "display".
+    readonly property string debugFpsCap: {
+        const v = debugFile.adapter.fpsCap
+        if (v === true || v === "true" || v === "60" || v === "60 FPS") return "60"
+        return "display"
+    }
+    function setDebugFpsEnabled(v: bool): void { setAdapterBool(debugFile, "fpsOverlay", v) }
+    function setDebugFpsCap(v: string): void {
+        const nv = (v === "60" || v === "60 FPS") ? "60" : "display"
+        if (("" + debugFile.adapter.fpsCap) === nv) return
+        debugFile.adapter.fpsCap = nv
+        debugFile.writeAdapter()
+    }
+
     FileView {
         id: notifFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/notifications.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/notifications.json"
         watchChanges: true; onFileChanged: debouncedReload(notifFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter { property int timeout: 5; property string position: "top-right" }
     }
@@ -709,7 +804,7 @@ Singleton {
     // 1200 ms.
     FileView {
         id: osdFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/osd.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/osd.json"
         watchChanges: true; onFileChanged: debouncedReload(osdFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property bool volumeEnabled: true
@@ -729,7 +824,7 @@ Singleton {
 
     FileView {
         id: calendarFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/calendar.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/calendar.json"
         watchChanges: true; onFileChanged: debouncedReload(calendarFile); blockLoading: true; printErrors: false
         // NOTE: weekStartDay is owned by CalendarPanel — it is
         // declared here only so layout writes never drop it from the file.
@@ -741,7 +836,7 @@ Singleton {
     // ---- Launcher (Panels > Launcher; bar OS icon + app search popup) ----
     FileView {
         id: launcherFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/launcher.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/launcher.json"
         watchChanges: true; onFileChanged: debouncedReload(launcherFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property int width: 520
@@ -749,6 +844,7 @@ Singleton {
             property int maxResults: 50
             property bool showDescriptions: true
             property string menuPrefix: "!"
+            property var hiddenApps: []
         }
     }
     readonly property int launcherWidth: Math.max(360, Math.min(900, Math.round(launcherFile.adapter.width !== undefined ? launcherFile.adapter.width : 520)))
@@ -776,11 +872,35 @@ Singleton {
         launcherFile.adapter.menuPrefix = p
         launcherFile.writeAdapter()
     }
+    // Hidden apps: desktop-entry ids the launcher drops from its app list.
+    // Toggled from Apps > Library > All apps; hiddenAppsRev invalidates
+    // bindings that read hiddenAppIds()/isAppHidden() (function reads are not
+    // tracked by QML), including LauncherPanel.allApps.
+    property int hiddenAppsRev: 0
+    Connections {
+        target: launcherFile
+        function onFileChanged() { root.hiddenAppsRev++ }
+    }
+    function hiddenAppIds(): var { return toStrArray(launcherFile.adapter.hiddenApps) }
+    function isAppHidden(id: string): bool {
+        return (id || "").length > 0 && hiddenAppIds().indexOf(id) >= 0
+    }
+    function setAppHidden(id: string, hidden: bool): void {
+        if (!id || id.length === 0) return
+        let list = hiddenAppIds()
+        const i = list.indexOf(id)
+        if (hidden && i < 0) list.push(id)
+        else if (!hidden && i >= 0) list.splice(i, 1)
+        else return
+        launcherFile.adapter.hiddenApps = list
+        launcherFile.writeAdapter()
+        hiddenAppsRev++
+    }
 
-    // ---- Screenshot UI (Panels > Screenshot UI; overlays/ScreenshotUI.qml) --
+    // ---- Screenshot UI (Panels > Screenshot UI; shell/overlays/ScreenshotUI.qml) --
     FileView {
         id: screenshotFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/screenshot.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/screenshot.json"
         watchChanges: true; onFileChanged: debouncedReload(screenshotFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property string defaultMode: "region"
@@ -808,7 +928,7 @@ Singleton {
     readonly property bool screenshotNotify: screenshotFile.adapter.notify !== false
     function setScreenshotNotify(v: bool): void { setAdapterBool(screenshotFile, "notify", v) }
     // Empty = the default (~/Pictures/Screenshots). `~` is expanded by
-    // scripts/screenshot.sh, not here, so the stored value stays portable.
+    // backend/scripts/screenshot.sh, not here, so the stored value stays portable.
     readonly property string screenshotSaveDir: {
         let d = screenshotFile.adapter.saveDir
         if (typeof d !== "string") return ""
@@ -839,16 +959,16 @@ Singleton {
     }
     FileView {
         id: barLayoutFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/bar_layout.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/bar_layout.json"
         watchChanges: true; onFileChanged: debouncedReload(barLayoutFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
-            property var left: ["workspaces"]
+            property var left: ["launcher", "workspaces"]
             property var twofifths: []
-            property var center: ["clock", "updates"]
+            property var center: ["activewindow"]
             property var fourfifths: []
-            property var right: []
+            property var right: ["systemtray", "controlcenter", "clock"]
             property var hidden: []
-            property int version: 0
+            property int version: 2
         }
         Component.onCompleted: barMigrateTimer.restart()
     }
@@ -864,7 +984,7 @@ Singleton {
         }
     }
     function barDefaultLayout(): var {
-        return { left: ["launcher", "workspaces", "activewindow"], twofifths: [], center: ["clock"], fourfifths: [], right: ["controlcenter", "systemtray"] }
+        return { left: ["launcher", "workspaces"], twofifths: [], center: ["activewindow"], fourfifths: [], right: ["systemtray", "controlcenter", "clock"] }
     }
     function toStrArray(v: var): var {
         let out = []
@@ -1098,7 +1218,7 @@ Singleton {
     // and right-click toggling works with zero BarModule changes.
     FileView {
         id: barLabelFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/bar_labels.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/bar_labels.json"
         watchChanges: true; onFileChanged: debouncedReload(barLabelFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var labels: ({})
@@ -1150,7 +1270,7 @@ Singleton {
     // the bar keeps its familiar look until the user turns it off.
     FileView {
         id: barBackgroundFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/bar_backgrounds.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/bar_backgrounds.json"
         watchChanges: true; onFileChanged: debouncedReload(barBackgroundFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var backgrounds: ({})
@@ -1168,10 +1288,12 @@ Singleton {
         try {
             let key = (id || "").trim()
             if (key.length === 0) return false
-            // The launcher (OS icon) card is synced to the workspaces card:
-            // one background setting drives both, and merge mode joins the
-            // two adjacent left-zone modules into one run automatically.
-            if (key === "launcher") key = "workspaces"
+            // While "Launcher button sync" is on, the launcher (OS icon) card
+            // follows the workspaces card: one background setting drives both,
+            // and merge mode joins the two adjacent left-zone modules into one
+            // run automatically. With sync off the launcher keeps its own
+            // entry (no card unless it was explicitly enabled).
+            if (key === "launcher" && workspaceLauncherSync) key = "workspaces"
             let m = barBackgroundFile.adapter.backgrounds
             if (m && m[key] !== undefined) return m[key] !== false
             return key === "workspaces"
@@ -1181,6 +1303,13 @@ Singleton {
         let key = (id || "").trim()
         if (key.length === 0) return
         let nv = !!v
+        // Dependent workspaces options only exist while the card does: turning
+        // the card off resets "Occupied background" and "Launcher button sync"
+        // so no hidden option keeps affecting the bar.
+        if (key === "workspaces" && !nv) {
+            setWorkspaceOccupiedBg(false)
+            setWorkspaceLauncherSync(false)
+        }
         // Persist explicit true/false so the choice survives restarts.
         try {
             let cur = barBackgroundFile.adapter.backgrounds
@@ -1200,7 +1329,7 @@ Singleton {
 
     FileView {
         id: trayFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/tray.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/tray.json"
         watchChanges: true; onFileChanged: debouncedReload(trayFile); blockLoading: true; printErrors: false
         adapter: JsonAdapter {
             property var pinned: []
@@ -1258,7 +1387,7 @@ Singleton {
     // ---- Caelestia-expressive motion tokens (caelestia-dots/shell) ----
     // Durations match AnimDurationTokens; curves match AnimCurves. Kept
     // separate from the legacy animFast/animNormal aliases so existing
-    // call-sites keep working while new ui/Anim primitives bind here.
+    // call-sites keep working while new style/ui/Anim primitives bind here.
     // All durations collapse to 0 when animations are disabled.
     readonly property int durSmall: animMs(200)
     readonly property int durNormal: animMs(400)
@@ -1272,13 +1401,17 @@ Singleton {
     readonly property int durSlowEffects: animMs(300)
     // BezierSpline control points (6 values per cubic segment). The
     // emphasized curve is two segments (12 values), everything else one.
+    // Spatial curves come in two sets: fluid (default, low/no overshoot so
+    // motion levels off early) and expressive (original Caelestia spring
+    // overshoot). Effects curves are always monotonic — opacity/color must
+    // never exceed their target.
     readonly property var curveStandard: [0.2, 0, 0, 1, 1, 1]
     readonly property var curveStandardAccel: [0.3, 0, 1, 1, 1, 1]
     readonly property var curveStandardDecel: [0, 0, 0, 1, 1, 1]
     readonly property var curveEmphasizedFull: [0.05, 0, 0.133333, 0.06, 0.166667, 0.4, 0.208333, 0.82, 0.25, 1, 1, 1]
-    readonly property var curveFastSpatial: [0.42, 1.67, 0.21, 0.9, 1, 1]
-    readonly property var curveDefaultSpatial: [0.38, 1.21, 0.22, 1, 1, 1]
-    readonly property var curveSlowSpatial: [0.39, 1.29, 0.35, 0.98, 1, 1]
+    readonly property var curveFastSpatial: motionFluid ? [0.05, 0.7, 0.1, 1, 1, 1] : [0.42, 1.67, 0.21, 0.9, 1, 1]
+    readonly property var curveDefaultSpatial: motionFluid ? [0.2, 1.06, 0.25, 1, 1, 1] : [0.38, 1.21, 0.22, 1, 1, 1]
+    readonly property var curveSlowSpatial: motionFluid ? [0.16, 1, 0.3, 1, 1, 1] : [0.39, 1.29, 0.35, 0.98, 1, 1]
     readonly property var curveFastEffects: [0.31, 0.94, 0.34, 1, 1, 1]
     readonly property var curveDefaultEffects: [0.34, 0.8, 0.34, 1, 1, 1]
     readonly property var curveSlowEffects: [0.34, 0.88, 0.34, 1, 1, 1]
@@ -1361,11 +1494,11 @@ Singleton {
     readonly property int panelAnimScale: durNormal
     readonly property int panelAnimExit: durFastEffects
     // Panel open (bar drawers + menu island + cross-panel glide): the
-    // DefaultSpatial attack with the overshoot cut back (control y 1.21 ->
-    // 1.12, ~1.4% -> ~0.4% past target). Full-height panel travel made the
-    // expressive overshoot read as a bounce; this lets the drawer settle.
-    // For no overshoot at all use [0.38, 1, 0.22, 1, 1, 1].
-    readonly property var curvePanelOpen: [0.38, 1.12, 0.22, 1, 1, 1]
+    // DefaultSpatial attack with the overshoot cut back. Full-height panel
+    // travel makes expressive overshoot read as a bounce; fluid keeps ~0.4%
+    // past target so the drawer still settles, expressive keeps the original
+    // 1.12. For no overshoot at all use [0.38, 1, 0.22, 1, 1, 1].
+    readonly property var curvePanelOpen: motionFluid ? [0.38, 1.04, 0.22, 1, 1, 1] : [0.38, 1.12, 0.22, 1, 1, 1]
     // Panel close (CaelestiaPopout curtain): shorter than the open run and
     // non-overshooting (the open curve's y > 1 would drive frameAxis
     // negative past the bar edge). Emphasized-decelerate leaves immediately
@@ -1382,7 +1515,7 @@ Singleton {
     readonly property int panelHideDelay: animationsEnabled
         ? Math.max(panelAnimClose, durPanelMorphHold + durDefaultEffects) + 20
         : 0
-    // Cross-panel morph (ui/PanelMorph + ui/CaelestiaPopout): opening a bar
+    // Cross-panel morph (style/ui/PanelMorph + style/ui/CaelestiaPopout): opening a bar
     // panel while another is open hands the outgoing card's pose to the
     // incoming popout, which glides from there to its own settled pose.
     // Hold = how long the outgoing card waits for the incoming surface to

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
-import "../../themes"
-import "../../services"
+import "../../../style/themes"
+import "../../../backend/services"
 
 Item {
     id: root
@@ -9,13 +9,12 @@ Item {
     property bool vertical: false
     property bool slotHovered: false
 
-    // Network/bluetooth/dnd icons are hidden while inactive; the volume icon
+    // Network/bluetooth icons are hidden while inactive; the volume icon
     // is always shown (its glyph already encodes level/mute). The tint only
     // distinguishes hover.
     readonly property color _netFg: slotHovered ? Theme.accent : Theme.textPrimary
     readonly property color _btFg: slotHovered ? Theme.accent : Theme.textPrimary
     readonly property color _volFg: slotHovered ? Theme.accent : Theme.textPrimary
-    readonly property color _dndFg: Theme.textPrimary
 
     implicitWidth: vertical ? colRow.implicitWidth + 12 : rowRow.implicitWidth + 16
     implicitHeight: vertical ? colRow.implicitHeight + 10 : rowRow.implicitHeight + 10
@@ -40,7 +39,6 @@ Item {
             StatusIcon { glyph: NetworkService.icon; tint: root._netFg; visible: NetworkService.netActive }
             StatusIcon { glyph: BluetoothService.icon; tint: root._btFg; visible: BluetoothService.btActive }
             StatusIcon { glyph: VolumeService.icon; tint: root._volFg }
-            StatusIcon { glyph: "󰂛"; tint: root._dndFg; visible: Theme.dndEnabled }
         }
         ColumnLayout {
             id: colRow
@@ -50,7 +48,6 @@ Item {
             StatusIcon { glyph: NetworkService.icon; tint: root._netFg; visible: NetworkService.netActive }
             StatusIcon { glyph: BluetoothService.icon; tint: root._btFg; visible: BluetoothService.btActive }
             StatusIcon { glyph: VolumeService.icon; tint: root._volFg }
-            StatusIcon { glyph: "󰂛"; tint: root._dndFg; visible: Theme.dndEnabled }
         }
     }
 

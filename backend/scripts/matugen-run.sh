@@ -16,7 +16,7 @@
 set -u
 
 SRC_CFG="$HOME/.config/matugen/config.toml"
-THEMING_JSON="$HOME/.config/quickshell/solstice/config/theming_settings.json"
+THEMING_JSON="$HOME/.config/quickshell/solstice/backend/config/theming_settings.json"
 
 MATUGEN_BIN="matugen"
 [ -x "$HOME/.cargo/bin/matugen" ] && MATUGEN_BIN="$HOME/.cargo/bin/matugen"
@@ -78,12 +78,13 @@ if off("templateObs"): drop.update(["obs", "obs-native"])
 if off("templateOpencode"): drop.add("opencode")
 if off("templatePapirus"): drop.add("papirus")
 if off("templatePrismlauncher"): drop.add("prismlauncher")
+if off("templateHelium"): drop.add("helium")
 
 known = {"quickshell", "umbriel", "gtk3", "gtk4", "qt5ct", "qt6ct",
          "qt-colorscheme", "kitty", "ghostty", "fcitx5", "firefox",
          "vscode-raw", "vscode-json", "neovim", "btop", "vesktop-midnight",
          "vesktop-system24", "obs", "obs-native", "opencode", "papirus",
-         "prismlauncher"}
+         "prismlauncher", "helium"}
 run_user = t.get("runUserTemplates", True) is not False
 
 def split_blocks(text):

@@ -2,14 +2,13 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Shapes
+import M3Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import "../themes"
-import "../services"
-import "../ui"
-import "../ui" as Ui
+import "../../style/themes"
+import "../../backend/services"
+import "../../style/ui"
 import "./CalendarModel.js" as Cal
 
 Scope {
@@ -140,145 +139,84 @@ Scope {
         }
     }
 
-    // --- M3 switch (copied from the settings app NexusControls.M3Switch):
-    // 1.7:1 track, handle widens while pressed, animated check/X icon, and
-    // Space/Enter support. The owning row still toggles from its StateLayer.
-    component M3Switch: Item {
-        id: m3Switch
+    // --- M3 expressive icon toggle: round state-layer target whose tonal
+    // background morphs into a random M3E shape while `checked` (same shape
+    // pool/contract as PowerAction and the settings nav badge). The shape is
+    // re-rolled on every toggle-on; toggling off morphs back to the circle.
+    component M3ShapeIconToggle: Item {
+        id: shapeToggle
+        property string glyph: ""
+        property string checkedGlyph: ""
         property bool checked: false
-        property bool disabled: false
+        property int size: 36
+        property int glyphSize: 15
+        property int pickedShape: MaterialShape.Circle
+        readonly property var shapeChoices: [
+            MaterialShape.Square, MaterialShape.Slanted, MaterialShape.Pill,
+            MaterialShape.Pentagon, MaterialShape.Gem, MaterialShape.Sunny,
+            MaterialShape.Cookie4Sided, MaterialShape.Cookie6Sided,
+            MaterialShape.Cookie7Sided, MaterialShape.Cookie9Sided,
+            MaterialShape.Cookie12Sided, MaterialShape.Clover4Leaf,
+            MaterialShape.Clover8Leaf
+        ]
         signal toggled(bool next)
-        // Tokens.font.body.medium.pointSize + Tokens.padding.small * 2
-        readonly property int trackHeight: Theme.fs(14) + 16
-        // StyledSwitch: implicitWidth = implicitHeight * 1.7
-        readonly property int trackWidth: Math.round(trackHeight * 1.7)
-        readonly property int handleSize: trackHeight - 4
-        implicitWidth: trackWidth
-        implicitHeight: trackHeight
-        activeFocusOnTab: !disabled
-        Keys.onSpacePressed: event => { if (!m3Switch.disabled) m3Switch.toggled(!m3Switch.checked); event.accepted = true }
-        Keys.onEnterPressed: event => { if (!m3Switch.disabled) m3Switch.toggled(!m3Switch.checked); event.accepted = true }
-        Keys.onReturnPressed: event => { if (!m3Switch.disabled) m3Switch.toggled(!m3Switch.checked); event.accepted = true }
 
-        Rectangle {
-            anchors.centerIn: parent
-            width: m3Switch.trackWidth
-            height: m3Switch.trackHeight
-            radius: height / 2
-            antialiasing: Theme.shapesAa
-            color: {
-                if (m3Switch.disabled)
-                    return m3Switch.checked ? Qt.alpha(Theme.on_surface, 0.12) : Qt.alpha(Theme.surface_container_highest, 0.38)
-                return m3Switch.checked ? Theme.accent : Theme.surface_container_highest
-            }
+        function pickShape(): void {
+            const list = shapeToggle.shapeChoices
+            if (list.length === 0) return
+            let next = list[Math.floor(Math.random() * list.length)]
+            if (list.length > 1 && next === shapeToggle.pickedShape)
+                next = list[(list.indexOf(next) + 1) % list.length]
+            shapeToggle.pickedShape = next
+        }
+        onCheckedChanged: if (checked) pickShape()
 
-            Rectangle {
-                // StyledSwitch: pressed handle widens to implicitHeight * 1.2
-                readonly property real nonAnimWidth: swMouse.pressed ? m3Switch.handleSize * 1.2 : m3Switch.handleSize
-
-                implicitWidth: nonAnimWidth
-                implicitHeight: m3Switch.handleSize
-                radius: Math.min(width, height) / 2
-                antialiasing: Theme.shapesAa
-                color: {
-                    if (m3Switch.disabled)
-                        return m3Switch.checked ? Theme.surface : Qt.alpha(Theme.on_surface, 0.12)
-                    return m3Switch.checked ? Theme.onAccent : Theme.outline
-                }
-
-                x: m3Switch.checked ? m3Switch.trackWidth - nonAnimWidth - 2 : 2
-                anchors.verticalCenter: parent.verticalCenter
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: parent.radius
-                    antialiasing: Theme.shapesAa
-
-                    color: m3Switch.checked ? Theme.accent : Theme.on_surface
-                    opacity: swMouse.pressed ? 0.1 : swMouse.containsMouse ? 0.08 : 0
-
-                    Behavior on opacity {
-                        Ui.Anim {
-                            type: Ui.Anim.DefaultEffects
-                        }
-                    }
-                }
-
-                Shape {
-                    id: icon
-                    // Scalar morph (0 = cross, 1 = check). Keep in sync with
-                    // NexusControls.M3Switch: animating QPointF breaks the
-                    // icon update (Qt "QQmlPointFValueType" warnings).
-                    property real morph: m3Switch.checked ? 1 : 0
-                    Behavior on morph {
-                        enabled: Theme.animationsEnabled
-                        NumberAnimation {
-                            duration: Theme.durFastSpatial
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.curveFastSpatial
-                        }
-                    }
-
-                    anchors.centerIn: parent
-                    width: height
-                    height: m3Switch.handleSize - 12
-                    preferredRendererType: Shape.CurveRenderer
-
-                    ShapePath {
-                        strokeWidth: Theme.fs(16) * 0.15
-                        strokeColor: {
-                            if (m3Switch.disabled)
-                                return m3Switch.checked ? Theme.outline : Theme.surface_container
-                            return m3Switch.checked ? Theme.accent : Theme.surface_container_highest
-                        }
-                        fillColor: "transparent"
-                        capStyle: Theme.cornerRadius === 0 ? ShapePath.SquareCap : ShapePath.RoundCap
-
-                        // Cross: (0.15,0.15)->(0.85,0.85) + (0.15,0.85)->(0.85,0.15)
-                        // Check: (0.15,0.5)->(0.4,0.7) + (0.4,0.7)->(0.85,0.2)
-                        startX: icon.width * 0.15
-                        startY: icon.height * (0.15 + 0.35 * icon.morph)
-
-                        PathLine {
-                            x: icon.width * (0.85 - 0.45 * icon.morph)
-                            y: icon.height * (0.85 - 0.15 * icon.morph)
-                        }
-                        PathMove {
-                            x: icon.width * (0.15 + 0.25 * icon.morph)
-                            y: icon.height * (0.85 - 0.15 * icon.morph)
-                        }
-                        PathLine {
-                            x: icon.width * 0.85
-                            y: icon.height * (0.15 + 0.05 * icon.morph)
-                        }
-
-                        Behavior on strokeColor {
-                            Ui.Anim.CAnim {}
-                        }
-                    }
-                }
-
-                Behavior on x {
-                    Ui.Anim {
-                        type: Ui.Anim.FastSpatial
-                    }
-                }
-
-                Behavior on implicitWidth {
-                    Ui.Anim {
-                        type: Ui.Anim.FastSpatial
-                    }
-                }
-            }
+        implicitWidth: size
+        implicitHeight: size
+        Layout.preferredWidth: size
+        Layout.preferredHeight: size
+        activeFocusOnTab: true
+        Keys.onSpacePressed: event => { shapeToggle.toggled(!shapeToggle.checked); event.accepted = true }
+        Keys.onEnterPressed: event => { shapeToggle.toggled(!shapeToggle.checked); event.accepted = true }
+        Keys.onReturnPressed: event => { shapeToggle.toggled(!shapeToggle.checked); event.accepted = true }
+        scale: shapeToggleLayer.pressed ? Theme.pressScale : 1
+        transformOrigin: Item.Center
+        Behavior on scale {
+            enabled: Theme.animationsEnabled
+            NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial }
         }
 
-        Ui.StateLayer {
-            id: swMouse
-            showHoverBackground: false
-            disabled: m3Switch.disabled
-            radius: Math.round(height / 2)
-            color: m3Switch.checked ? Theme.onAccent : Theme.textPrimary
-            onClicked: mouse => { if (!m3Switch.disabled) m3Switch.toggled(!m3Switch.checked); mouse.accepted = true }
+        MaterialShape {
+            anchors.centerIn: parent
+            implicitSize: shapeToggle.size
+            shape: shapeToggle.checked ? shapeToggle.pickedShape : MaterialShape.Circle
+            color: shapeToggle.checked ? Theme.primary : Theme.surface_container_highest
+            animationDuration: Theme.durDefaultSpatial
+            animationEasing.type: Easing.BezierSpline
+            animationEasing.bezierCurve: Theme.curveDefaultSpatial
+            Behavior on color {
+                enabled: Theme.animationsEnabled
+                ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
+            }
+            Text {
+                anchors.centerIn: parent
+                text: shapeToggle.checked && shapeToggle.checkedGlyph.length > 0 ? shapeToggle.checkedGlyph : shapeToggle.glyph
+                color: shapeToggle.checked ? Theme.on_primary : Theme.textPrimary
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.fs(shapeToggle.glyphSize)
+                antialiasing: Theme.textAa
+                renderType: Theme.textRenderType
+                Behavior on color {
+                    enabled: Theme.animationsEnabled
+                    ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
+                }
+            }
+            StateLayer {
+                id: shapeToggleLayer
+                radius: Math.round(shapeToggle.size / 2)
+                color: shapeToggle.checked ? Theme.on_primary : Theme.textPrimary
+                onClicked: shapeToggle.toggled(!shapeToggle.checked)
+            }
         }
     }
 
@@ -638,18 +576,46 @@ Scope {
             anchors.top: parent.top
             anchors.margins: 12
             spacing: 10
-            // Leading urgency badge (M3 avatar slot).
+            // Leading app avatar: real app icon clipped into a tonal circle;
+            // urgency glyph as fallback (critical = alert, else bell).
             Rectangle {
+                id: notifAvatar
                 Layout.alignment: Qt.AlignTop
                 Layout.preferredWidth: 32
                 Layout.preferredHeight: 32
                 radius: width / 2
                 antialiasing: Theme.shapesAa
-                color: (cardRoot.entry.urgency === 2) ? Theme.error : Theme.surface_container_highest
+                clip: true
+                readonly property bool isCritical: cardRoot.entry.urgency === 2
+                color: isCritical ? Theme.error : Theme.surface_container_highest
+                readonly property string iconSource: {
+                    let ic = cardRoot.entry.appIcon ? String(cardRoot.entry.appIcon) : ""
+                    if (ic === "") return ""
+                    if (ic.startsWith("/") || ic.startsWith("file://") || ic.startsWith("image://")) return ic
+                    if (Quickshell.hasThemeIcon(ic)) return Quickshell.iconPath(ic)
+                    let lc = ic.toLowerCase()
+                    if (Quickshell.hasThemeIcon(lc)) return Quickshell.iconPath(lc)
+                    return Quickshell.iconPath(ic)
+                }
+                property bool iconFailed: false
+                onIconSourceChanged: iconFailed = false
+                Image {
+                    anchors.fill: parent
+                    source: notifAvatar.iconSource
+                    sourceSize.width: 64
+                    sourceSize.height: 64
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: true
+                    smooth: true
+                    visible: !notifAvatar.iconFailed && notifAvatar.iconSource !== ""
+                    onStatusChanged: if (status === Image.Error) notifAvatar.iconFailed = true
+                }
                 Text {
                     anchors.centerIn: parent
-                    text: (cardRoot.entry.urgency === 2) ? "󰅚" : "󰂚"
-                    color: (cardRoot.entry.urgency === 2) ? Theme.on_error : Theme.textSecondary
+                    visible: notifAvatar.iconFailed || notifAvatar.iconSource === ""
+                    text: notifAvatar.isCritical ? "󰅚" : "󰂚"
+                    color: notifAvatar.isCritical ? Theme.on_error : Theme.textSecondary
                     font.family: Theme.iconFontFamily
                     font.pixelSize: Theme.fs(15)
                     antialiasing: Theme.textAa
@@ -659,30 +625,50 @@ Scope {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-                RowLayout {
+                // Header line: app name · relative time (screenshot layout).
+                Row {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 5
                     Text {
                         antialiasing: Theme.textAa
                         renderType: Theme.textRenderType
-                        Layout.fillWidth: true
-                        visible: (cardRoot.entry.summary || "").length > 0
-                        text: cardRoot.entry.summary || ""
+                        width: Math.min(implicitWidth, Math.max(0, parent.width - calAppDot.implicitWidth - calAppTime.implicitWidth - 10))
+                        text: cardRoot.entry.appName || "Notification"
                         color: (cardRoot.entry.urgency === 2) ? Theme.on_error_container : Theme.textPrimary
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.fs(13); font.weight: Font.DemiBold
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 2
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fs(12); font.weight: Font.DemiBold
                         elide: Text.ElideRight
+                        maximumLineCount: 1
                         textFormat: Text.PlainText
                     }
                     Text {
+                        id: calAppDot
                         antialiasing: Theme.textAa
                         renderType: Theme.textRenderType
-                        Layout.alignment: Qt.AlignTop
+                        text: "·"
+                        color: (cardRoot.entry.urgency === 2) ? Theme.withAlpha(Theme.on_error_container, 0.7) : Theme.textMuted
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fs(12)
+                    }
+                    Text {
+                        id: calAppTime
+                        antialiasing: Theme.textAa
+                        renderType: Theme.textRenderType
                         text: cardRoot.scope.timeAgo(cardRoot.entry.time)
                         color: (cardRoot.entry.urgency === 2) ? Theme.withAlpha(Theme.on_error_container, 0.72) : Theme.textMuted
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.fs(10); font.weight: Font.Medium
+                        font.family: Theme.fontFamily; font.pixelSize: Theme.fs(11); font.weight: Font.Medium
                     }
+                }
+                Text {
+                    antialiasing: Theme.textAa
+                    renderType: Theme.textRenderType
+                    Layout.fillWidth: true
+                    visible: (cardRoot.entry.summary || "").length > 0
+                    text: cardRoot.entry.summary || ""
+                    color: (cardRoot.entry.urgency === 2) ? Theme.on_error_container : Theme.textPrimary
+                    font.family: Theme.fontFamily; font.pixelSize: Theme.fs(13); font.weight: Font.DemiBold
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    textFormat: Text.PlainText
                 }
                 Text {
                     antialiasing: Theme.textAa
@@ -742,76 +728,17 @@ Scope {
                     Layout.fillWidth: true
                     verticalAlignment: Text.AlignVCenter
                 }
+                M3ShapeIconToggle {
+                    glyph: "󰂚"
+                    checkedGlyph: "󰂛"
+                    checked: Theme.dndEnabled
+                    onToggled: n => Theme.setDndEnabled(n)
+                }
                 M3Button {
                     visible: notifRoot.scope.notifList.length > 0
                     label: "Clear"
                     filled: false
                     onClicked: notifRoot.scope.clearAllNotifications()
-                }
-            }
-
-            // DND as an M3 list item: tonal card, whole row toggles, switch is
-            // the trailing control.
-            Rectangle {
-                id: dndRow
-                Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                radius: 20
-                color: Theme.panelCardHigh
-                antialiasing: Theme.shapesAa
-
-                // Declared before the row content (settings ToggleRow pattern):
-                // the switch keeps its own press feedback, clicks on the label
-                // or empty space fall through here.
-                StateLayer {
-                    id: dndLayer
-                    radius: 20
-                    color: Theme.textPrimary
-                    onClicked: Theme.setDndEnabled(!Theme.dndEnabled)
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 10
-                    spacing: 10
-                    Rectangle {
-                        Layout.preferredWidth: 32
-                        Layout.preferredHeight: 32
-                        radius: width / 2
-                        antialiasing: Theme.shapesAa
-                        color: Theme.dndEnabled ? Theme.primary : Theme.surface_container_highest
-                        Behavior on color {
-                            enabled: Theme.animationsEnabled
-                            ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
-                        }
-                        Text {
-                            antialiasing: Theme.textAa
-                            renderType: Theme.textRenderType
-                            anchors.centerIn: parent
-                            text: "󰂛"
-                            color: Theme.dndEnabled ? Theme.on_primary : Theme.textSecondary
-                            font.family: Theme.iconFontFamily
-                            font.pixelSize: Theme.fs(15)
-                            Behavior on color {
-                                enabled: Theme.animationsEnabled
-                                ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
-                            }
-                        }
-                    }
-                    Text {
-                        antialiasing: Theme.textAa
-                        renderType: Theme.textRenderType
-                        text: "Do Not Disturb"
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily; font.pixelSize: Theme.fs(13); font.weight: Font.Medium
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    M3Switch {
-                        checked: Theme.dndEnabled
-                        onToggled: n => Theme.setDndEnabled(n)
-                    }
                 }
             }
 
@@ -880,6 +807,11 @@ Scope {
                             id: groupCol
                             required property var modelData
                             readonly property bool isCollapsed: notifRoot.scope.isGroupCollapsed(modelData.appName)
+                            // Cards stay built once a group was opened: the
+                            // collapse morph needs them while the body shrinks.
+                            // Groups never opened keep only the 2-card peek.
+                            property bool everExpanded: !isCollapsed
+                            onIsCollapsedChanged: if (!isCollapsed) everExpanded = true
                             width: notifListCol.width
                             spacing: 6
                             RowLayout {
@@ -953,57 +885,88 @@ Scope {
                                     onClicked: notifRoot.scope.clearGroupNotifications(groupCol.modelData)
                                 }
                             }
-                            Column {
-                                id: flowStack
+                            // Expand/minimize morph: one clipped body animates
+                            // its height between the minimized deck and the
+                            // full card flow while the two stacks crossfade
+                            // (spatial height + effects fade, same split as
+                            // the toast overlay). The peek sits underneath so
+                            // it is revealed as the flow fades/shrinks away.
+                            Item {
+                                id: groupBody
                                 width: parent.width
-                                spacing: 6
-                                visible: !groupCol.isCollapsed
-                                Repeater {
-                                    model: groupCol.isCollapsed ? [] : modelData.entries
-                                    delegate: NotifCard {
-                                        required property var modelData
+                                height: groupCol.isCollapsed ? peekStack.height : flowStack.implicitHeight
+                                clip: true
+                                Behavior on height {
+                                    enabled: Theme.animationsEnabled
+                                    NumberAnimation { duration: Theme.durMotionSharedAxis; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
+                                }
+
+                                // Collapsed stack (minimized): the 2 latest
+                                // notifications as real cards in a deck — newest
+                                // on top, second peeking out beneath it. Opaque
+                                // backing keeps the translucent card fills from
+                                // showing through.
+                                Item {
+                                    id: peekStack
+                                    width: parent.width
+                                    readonly property var firstEntry: (modelData.entries && modelData.entries.length > 0) ? modelData.entries[0] : null
+                                    readonly property var secondEntry: (modelData.entries && modelData.entries.length > 1) ? modelData.entries[1] : null
+                                    height: Math.max(topCard.height, secondCard.visible ? secondCard.y + secondCard.height : 0)
+                                    clip: true
+                                    visible: opacity > 0.01
+                                    opacity: groupCol.isCollapsed ? 1 : 0
+                                    Behavior on opacity {
+                                        enabled: Theme.animationsEnabled
+                                        NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects }
+                                    }
+                                    NotifCard {
+                                        id: secondCard
                                         scope: notifRoot.scope
-                                        entry: modelData
-                                        width: notifListCol.width
+                                        entry: peekStack.secondEntry ? peekStack.secondEntry : ({})
+                                        visible: peekStack.secondEntry !== null
+                                        expandOnClick: true
+                                        onExpandRequested: notifRoot.scope.toggleGroupCollapsed(modelData.appName)
+                                        x: 12
+                                        y: 12
+                                        width: parent.width - 24
+                                    }
+                                    // Opaque backing for the top card.
+                                    Rectangle {
+                                        width: parent.width
+                                        height: topCard.height
+                                        color: Theme.panelCard
+                                    }
+                                    NotifCard {
+                                        id: topCard
+                                        scope: notifRoot.scope
+                                        entry: peekStack.firstEntry ? peekStack.firstEntry : ({})
+                                        width: parent.width
+                                        expandOnClick: true
+                                        onExpandRequested: notifRoot.scope.toggleGroupCollapsed(modelData.appName)
                                     }
                                 }
-                            }
-                            // Collapsed stack (minimized): the 2 latest notifications
-                            // as real cards in a deck — newest on top, second
-                            // peeking out beneath it. Opaque backing keeps the
-                            // translucent card fills from showing through.
-                            Item {
-                                id: peekStack
-                                width: parent.width
-                                readonly property var firstEntry: (modelData.entries && modelData.entries.length > 0) ? modelData.entries[0] : null
-                                readonly property var secondEntry: (modelData.entries && modelData.entries.length > 1) ? modelData.entries[1] : null
-                                height: Math.max(topCard.height, secondCard.visible ? secondCard.y + secondCard.height : 0)
-                                clip: true
-                                visible: groupCol.isCollapsed && firstEntry !== null
-                                NotifCard {
-                                    id: secondCard
-                                    scope: notifRoot.scope
-                                    entry: peekStack.secondEntry ? peekStack.secondEntry : ({})
-                                    visible: peekStack.secondEntry !== null
-                                    expandOnClick: true
-                                    onExpandRequested: notifRoot.scope.toggleGroupCollapsed(modelData.appName)
-                                    x: 12
-                                    y: 12
-                                    width: parent.width - 24
-                                }
-                                // Opaque backing for the top card.
-                                Rectangle {
+
+                                // Full flow (expanded). Stays instantiated while
+                                // collapsing (everExpanded), then empties.
+                                Column {
+                                    id: flowStack
                                     width: parent.width
-                                    height: topCard.height
-                                    color: Theme.panelCard
-                                }
-                                NotifCard {
-                                    id: topCard
-                                    scope: notifRoot.scope
-                                    entry: peekStack.firstEntry ? peekStack.firstEntry : ({})
-                                    width: parent.width
-                                    expandOnClick: true
-                                    onExpandRequested: notifRoot.scope.toggleGroupCollapsed(modelData.appName)
+                                    spacing: 6
+                                    visible: opacity > 0.01
+                                    opacity: groupCol.isCollapsed ? 0 : 1
+                                    Behavior on opacity {
+                                        enabled: Theme.animationsEnabled
+                                        NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects }
+                                    }
+                                    Repeater {
+                                        model: (!groupCol.isCollapsed || groupCol.everExpanded) ? modelData.entries : []
+                                        delegate: NotifCard {
+                                            required property var modelData
+                                            scope: notifRoot.scope
+                                            entry: modelData
+                                            width: notifListCol.width
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1023,7 +986,7 @@ Scope {
 
     FileView {
         id: calendarSettingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/calendar.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/calendar.json"
         watchChanges: true
         onFileChanged: reload()
         blockLoading: true
@@ -1043,7 +1006,7 @@ Scope {
         repeat: false
         onTriggered: {
             if (!calendarSettingsInitProc.running) {
-                calendarSettingsInitProc.command = ["bash", "-c", "mkdir -p ~/.config/quickshell/solstice; if [ ! -f ~/.config/quickshell/solstice/config/calendar.json ]; then echo '{\"weekStartDay\":\"sunday\"}' > ~/.config/quickshell/solstice/config/calendar.json; fi; echo done"]
+                calendarSettingsInitProc.command = ["bash", "-c", "mkdir -p ~/.config/quickshell/solstice; if [ ! -f ~/.config/quickshell/solstice/backend/config/calendar.json ]; then echo '{\"weekStartDay\":\"sunday\"}' > ~/.config/quickshell/solstice/backend/config/calendar.json; fi; echo done"]
                 calendarSettingsInitProc.running = true
             }
         }
@@ -1096,6 +1059,7 @@ Scope {
                     out.push({
                         id: (e.id !== undefined && isFinite(Number(e.id))) ? Math.round(Number(e.id)) : -1,
                         appName: String(e.appName || "Notification").slice(0, 120),
+                        appIcon: String(e.appIcon || "").slice(0, 300),
                         summary: String(e.summary || "").slice(0, 300),
                         body: String(e.body || "").slice(0, 500),
                         urgency: Math.round(urg),
@@ -1283,7 +1247,7 @@ Scope {
             // not eat the click that belongs to the panel now on top.
             MouseArea { anchors.fill: parent; enabled: root.showCalendar; onClicked: root.dismissed() }
 
-            // Caelestia popout (ui/CaelestiaPopout): curtain reveal from
+            // Caelestia popout (style/ui/CaelestiaPopout): curtain reveal from
             // behind the bar edge + slide + nested fades off one offsetScale
             // driver (1:1 with caelestia-dots/shell).
             CaelestiaPopout {

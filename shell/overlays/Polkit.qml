@@ -7,16 +7,31 @@ import Quickshell.Io // required — provides IpcHandler
 import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Services.Polkit
-import "../themes"
-import "../ui"
+import "../../style/themes"
+import "../../style/ui"
+import "../../backend/services"
 
 Scope {
     id: polkitScope
 
+    // STABILITY: register on a short delay. On a config reload quickshell
+    // builds the new tree before dropping the old generation, so an agent
+    // created immediately would race its own predecessor and log
+    // "An authentication agent already exists for the given subject".
+    // The delay lets the previous generation go away first; the watchdog
+    // below still handles external agents and real failures.
+    property bool agentStartRequested: false
     Loader {
         id: agentLoader
-        active: true
+        // Never register from a duplicate instance: the primary already owns
+        // the session agent (InstanceGuard decides; see shell.qml).
+        active: polkitScope.agentStartRequested && InstanceGuard.isPrimary
         sourceComponent: agentComponent
+    }
+    Timer {
+        id: agentStartTimer
+        interval: 500; repeat: false; running: true
+        onTriggered: polkitScope.agentStartRequested = true
     }
     Component {
         id: agentComponent
@@ -31,14 +46,14 @@ Scope {
     property bool agentRegistered: agentObj ? agentObj.isRegistered : false
     onAgentRegisteredChanged: { try { Theme.setPolkitReady(agentRegistered) } catch (e) { } }
     function recreateAgent(): void {
-        if (!agentLoader.active) { agentLoader.active = true; return }
-        agentLoader.active = false
+        if (!polkitScope.agentStartRequested) { polkitScope.agentStartRequested = true; return }
+        polkitScope.agentStartRequested = false
         agentRecreateTimer.restart()
     }
     Timer {
         id: agentRecreateTimer
         interval: 700; repeat: false
-        onTriggered: agentLoader.active = true
+        onTriggered: polkitScope.agentStartRequested = true
     }
     Timer {
         id: agentWatchdog
@@ -163,7 +178,7 @@ Scope {
         }
         function cancel(): string { if (flow) flow.cancelAuthenticationRequest(); return "cancel sent" }
         function retry(): string { polkitScope.retryAgent(); return "polkit agent re-register requested" }
-        function trigger(): string { return "run: ~/.config/quickshell/solstice/scripts/test-polkit.sh  or  pkexec --disable-internal-agent id" }
+        function trigger(): string { return "run: ~/.config/quickshell/solstice/backend/scripts/test-polkit.sh  or  pkexec --disable-internal-agent id" }
     }
 
     // Single fullscreen window per screen: no separate backdrop layer, so the

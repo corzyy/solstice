@@ -4,9 +4,9 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
-import "../../themes"
-import "../../services"
-import "../../ui"
+import "../../../style/themes"
+import "../../../backend/services"
+import "../../../style/ui"
 
 // Android 17 / M3 Expressive media carousel:
 // - every MPRIS session is a card; the active one is large, the others are
@@ -75,6 +75,34 @@ Item {
         activeIndex = index
     }
 
+    // Scroll switching: wheel anywhere on the carousel moves to the previous
+    // session (up) or next (down), wrapping around. Deeper consumers still
+    // win — the seek bar's MouseArea accepts the wheel first (delivery walks
+    // items deepest-first), so scrolling over the bar keeps seeking.
+    WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        enabled: root.playerCount > 1 && !root.editing
+        onWheel: event => {
+            if (event.angleDelta.y === 0) return
+            // One switch per notch: momentum scrolling would otherwise race
+            // through every card (same debounce pattern as CalendarPanel).
+            if (playerScrollDebounce.running) {
+                event.accepted = true
+                return
+            }
+            playerScrollDebounce.start()
+            const n = root.playerCount
+            const step = event.angleDelta.y > 0 ? -1 : 1
+            root.activeIndex = (root.activeIndex + step + n) % n
+            event.accepted = true
+        }
+    }
+
+    Timer {
+        id: playerScrollDebounce
+        interval: 100
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: root.cardGap
@@ -95,7 +123,7 @@ Item {
     }
 
     // No session at all: single placeholder card.
-    ClippingRectangle {
+    ClipRect {
         anchors.fill: parent
         visible: root.playerCount === 0
         radius: Math.min(Theme.cornerRadius, Math.min(width, height) / 2)
@@ -381,7 +409,7 @@ Item {
             NumberAnimation { duration: Theme.durMotionSharedAxis; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
         }
 
-        ClippingRectangle {
+        ClipRect {
             anchors.fill: parent
             radius: Math.min(Theme.cornerRadius, width / 2)
             color: Theme.panelCardHigh

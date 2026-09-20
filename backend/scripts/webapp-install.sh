@@ -61,7 +61,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 if [[ "${1:-}" == "--repair" ]]; then
-    [[ -x "$LAUNCHER" ]] || LAUNCHER="$HOME/.config/quickshell/solstice/scripts/webapp-launch.sh"
+    [[ -x "$LAUNCHER" ]] || LAUNCHER="$HOME/.config/quickshell/solstice/backend/scripts/webapp-launch.sh"
     repaired=0
     if [[ -d "$DESKTOP_DIR" ]]; then
         while IFS= read -r -d '' f; do

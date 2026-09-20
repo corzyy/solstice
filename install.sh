@@ -7,7 +7,7 @@
 # Or run from a checkout:  ./install.sh
 #
 # Installs the solstice quickshell to ${SOLSTICE_DEST:-$HOME/.config/quickshell/solstice},
-# preserving any existing config/ and themes/snapshots/.
+# preserving any existing backend/config/ and style/themes/snapshots/.
 set -u
 
 REPO="${SOLSTICE_REPO:-https://github.com/corzyy/solstice}"
@@ -103,7 +103,7 @@ fi
 
 if [[ -e "$DEST" ]]; then
     echo "solstice already exists at $DEST."
-    if ! confirm "Reinstall/update it (keeping config/ and themes/snapshots/)?"; then
+    if ! confirm "Reinstall/update it (keeping backend/config/ and style/themes/snapshots/)?"; then
         echo "Aborted." >&2
         exit 1
     fi
@@ -118,22 +118,22 @@ trap cleanup EXIT INT TERM
 # Preserve user-owned state across (re)installs.
 KEEP="$TMP/keep"
 mkdir -p "$KEEP"
-if [[ -d "$DEST/config" ]]; then
-    cp -a "$DEST/config" "$KEEP/config"
+if [[ -d "$DEST/backend/config" ]]; then
+    cp -a "$DEST/backend/config" "$KEEP/backend/config"
 fi
-if [[ -d "$DEST/themes/snapshots" ]]; then
-    mkdir -p "$KEEP/themes"
-    cp -a "$DEST/themes/snapshots" "$KEEP/themes/snapshots"
+if [[ -d "$DEST/style/themes/snapshots" ]]; then
+    mkdir -p "$KEEP/style/themes"
+    cp -a "$DEST/style/themes/snapshots" "$KEEP/style/themes/snapshots"
 fi
 
 # Ship new default configs without overwriting existing user settings.
-if [[ -d "$SRC/config" && -d "$KEEP/config" ]]; then
-    for f in "$SRC/config/"*; do
+if [[ -d "$SRC/backend/config" && -d "$KEEP/backend/config" ]]; then
+    for f in "$SRC/backend/config/"*; do
         [[ -e "$f" ]] || continue
         base="$(basename "$f")"
-        if [[ ! -e "$KEEP/config/$base" ]]; then
+        if [[ ! -e "$KEEP/backend/config/$base" ]]; then
             echo "New default config: $base"
-            cp -a "$f" "$KEEP/config/$base"
+            cp -a "$f" "$KEEP/backend/config/$base"
         fi
     done
 fi
@@ -152,22 +152,42 @@ if ! mv "$TMP/repo" "$DEST"; then
     exit 1
 fi
 
-if [[ -d "$KEEP/config" ]]; then
-    rm -rf "$DEST/config"
-    cp -a "$KEEP/config" "$DEST/config"
+if [[ -d "$KEEP/backend/config" ]]; then
+    rm -rf "$DEST/backend/config"
+    cp -a "$KEEP/backend/config" "$DEST/backend/config"
 fi
-if [[ -d "$KEEP/themes/snapshots" ]]; then
-    mkdir -p "$DEST/themes"
-    rm -rf "$DEST/themes/snapshots"
-    cp -a "$KEEP/themes/snapshots" "$DEST/themes/snapshots"
+if [[ -d "$KEEP/style/themes/snapshots" ]]; then
+    mkdir -p "$DEST/style/themes"
+    rm -rf "$DEST/style/themes/snapshots"
+    cp -a "$KEEP/style/themes/snapshots" "$DEST/style/themes/snapshots"
 fi
 
-chmod +x "$DEST/scripts/"*.sh "$DEST/scripts/solstice" 2>/dev/null || true
+chmod +x "$DEST/backend/scripts/"*.sh "$DEST/backend/scripts/solstice" 2>/dev/null || true
+
+# Expose the CLI as `solstice` in PATH. Umbriel's autostart ("solstice start")
+# and every shell keybind ("spawn:solstice module …") go through this symlink.
+# Refreshed on every install so a moved script can never leave it dangling.
+# Skipped for test installs (SOLSTICE_DEST), which must not repoint the live CLI.
+if [[ -z "${SOLSTICE_DEST:-}" ]]; then
+    BIN_DIR="$HOME/.local/bin"
+    mkdir -p "$BIN_DIR"
+    ln -sf "$DEST/backend/scripts/solstice" "$BIN_DIR/solstice"
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) ;;
+        *) echo "Note: $BIN_DIR is not in PATH — add it so 'solstice' works in keybinds." ;;
+    esac
+fi
 
 # Launcher emoji picker needs a colour emoji font; user-level, best-effort.
 if command -v fc-list >/dev/null 2>&1 && ! fc-list 2>/dev/null | grep -qi "Noto Color Emoji"; then
     echo "Installing Noto Color Emoji (user font) ..."
-    bash "$DEST/scripts/ensure-emoji-font.sh" || true
+    bash "$DEST/backend/scripts/ensure-emoji-font.sh" || true
+fi
+
+# Workspace window glyphs need the variable symbol font; user-level, best-effort.
+if command -v fc-list >/dev/null 2>&1 && ! fc-list 2>/dev/null | grep -qi "Material Symbols Rounded"; then
+    echo "Installing Material Symbols Rounded (user font) ..."
+    bash "$DEST/backend/scripts/ensure-symbol-font.sh" || true
 fi
 
 echo ""
@@ -179,7 +199,7 @@ elif [[ -n "${SOLSTICE_DEST:-}" ]]; then
     echo "Done. (Test install — shell not started.)"
 elif command -v quickshell >/dev/null 2>&1; then
     if quickshell ipc -c solstice call solstice reload >/dev/null 2>&1 \
-       || "$DEST/scripts/solstice" start >/dev/null 2>&1; then
+       || "$DEST/backend/scripts/solstice" start >/dev/null 2>&1; then
         echo "Shell started."
     else
         echo "Installed. Start it manually with:  solstice start"

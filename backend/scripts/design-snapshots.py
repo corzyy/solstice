@@ -12,7 +12,7 @@ Usage:
     design-snapshots.py restore <id>      # restore files, print meta JSON
     design-snapshots.py delete <id>       # delete a snapshot
 
-Snapshots live in ~/.config/quickshell/solstice/themes/snapshots/<id>/ with a
+Snapshots live in ~/.config/quickshell/solstice/style/themes/snapshots/<id>/ with a
 meta.json, copies of the design configs and a copy of the wallpaper (so a
 snapshot survives the original file being moved or deleted).
 """
@@ -26,20 +26,20 @@ import sys
 
 HOME = pathlib.Path.home()
 SOLSTICE = HOME / ".config/quickshell/solstice"
-THEMES = SOLSTICE / "themes"
-CONFIG = SOLSTICE / "config"
+THEMES = SOLSTICE / "style" / "themes"
+CONFIG = SOLSTICE / "backend" / "config"
 SNAP_BASE = THEMES / "snapshots"
 INDEX = SNAP_BASE / "index.json"
 
 # design state files, relative to SOLSTICE
 STATE_FILES = [
-    "themes/theme_engine.json",
-    "themes/matugen_settings.json",
-    "config/current_wallpaper.txt",
-    "config/wallpaper_settings.json",
-    "config/topbar_settings.json",
-    "config/font_settings.json",
-    "config/theming_settings.json",
+    "style/themes/theme_engine.json",
+    "style/themes/matugen_settings.json",
+    "backend/config/current_wallpaper.txt",
+    "backend/config/wallpaper_settings.json",
+    "backend/config/topbar_settings.json",
+    "backend/config/font_settings.json",
+    "backend/config/theming_settings.json",
 ]
 
 PRESET_IDS = ("everforest", "tokyonight", "petrichor", "monochrome", "catppuccin", "gruvbox")

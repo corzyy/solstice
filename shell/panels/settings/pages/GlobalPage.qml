@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
-import "../../../services"
+import "../../../../style/themes"
+import "../../../../backend/services"
 import ".."
 
 NexusControls.PageBase {
@@ -19,6 +19,14 @@ NexusControls.PageBase {
         subtext: "Panels, menus, toggles and sliders"
         checked: Theme.animationsEnabled
         onToggled: n => Theme.setAnimationsEnabled(n)
+    }
+    NexusControls.ToggleRow {
+        icon: "󰒓"
+        tint: Theme.primary
+        text: "Fluid Motion"
+        subtext: "Less overshoot, smoother without VSync"
+        checked: Theme.motionFluid
+        onToggled: n => Theme.setMotionFluid(n)
     }
     NexusControls.SliderRow {
         last: true

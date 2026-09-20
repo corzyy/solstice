@@ -1,6 +1,6 @@
 // PanelShell — shared container for all bar panels.
 //
-// The open/close run is the 1:1 Caelestia popout animation (ui/CaelestiaPopout
+// The open/close run is the 1:1 Caelestia popout animation (style/ui/CaelestiaPopout
 // — ClipWrapper + Wrapper + Content): the card is clipped at the bar's inner
 // edge and slides out from behind it on the expressive default spatial curve
 // (500ms) while the popout fades in over 200ms, exactly like the reference.
@@ -149,7 +149,7 @@ Item {
                 interactive: contentHeight > height
                 // Cross-panel morph choreography: the outgoing content
                 // shifts/scales out, the incoming one shifts/scales in
-                // (direction-aware, see ui/CaelestiaPopout). Button-origin
+                // (direction-aware, see style/ui/CaelestiaPopout). Button-origin
                 // runs additionally shrink the layout with the frame
                 // (contentShrink), so the panel is a miniature of itself
                 // while it grows out of / collapses into its button.

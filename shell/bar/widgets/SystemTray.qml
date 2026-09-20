@@ -12,7 +12,7 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.DBusMenu
 import Quickshell.Services.SystemTray as TrayService
-import "../../themes"
+import "../../../style/themes"
 
 BarWidgetBase {
     id: root

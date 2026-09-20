@@ -16,10 +16,10 @@ import subprocess
 import sys
 
 HOME = pathlib.Path.home()
-SOLSTICE_CFG = HOME / ".config/quickshell/solstice/config"
-SOLSTICE_SCRIPTS = HOME / ".config/quickshell/solstice/scripts"
+SOLSTICE_CFG = HOME / ".config/quickshell/solstice/backend/config"
+SOLSTICE_SCRIPTS = HOME / ".config/quickshell/solstice/backend/scripts"
 THEMING_JSON = SOLSTICE_CFG / "theming_settings.json"
-MATUGEN_SETTINGS = HOME / ".config/quickshell/solstice/themes/matugen_settings.json"
+MATUGEN_SETTINGS = HOME / ".config/quickshell/solstice/style/themes/matugen_settings.json"
 MATUGEN_CONFIG = HOME / ".config/matugen/config.toml"
 GTK3_INI = HOME / ".config/gtk-3.0/settings.ini"
 GTK4_INI = HOME / ".config/gtk-4.0/settings.ini"
@@ -196,7 +196,7 @@ def terminals(pairs: dict) -> None:
     # light apply here is enough to converge everything.
     if matugen_mode() != "light":
         return
-    wall = sh_out("cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n'")
+    wall = sh_out("cat ~/.config/quickshell/solstice/backend/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n'")
     if not wall:
         wall = sh_out("cat ~/.cache/swaybg/current 2>/dev/null | tr -d '\\r\\n'")
     if not wall or "\n" in wall:

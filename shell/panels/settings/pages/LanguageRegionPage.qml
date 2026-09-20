@@ -2,8 +2,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../../../themes"
-import "../../../services"
+import "../../../../style/themes"
+import "../../../../backend/services"
 import ".."
 
 // Language & Region — system language and formats via systemd-localed

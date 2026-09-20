@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
-import "../../../ui" as Ui
+import "../../../../style/themes"
+import "../../../../style/ui" as Ui
 import ".."
 
 // Android 17 Settings — Panels.
@@ -76,9 +76,11 @@ NexusControls.PageBase {
             Rectangle {
                 width: 40
                 height: 40
-                radius: 20
+                // M3E shape morph: circle at rest, rounded square while hovered.
+                radius: backMouse.containsMouse ? 12 : 20
                 color: backMouse.containsMouse ? Theme.panelCardHighest : Theme.panelCardHigh
                 antialiasing: Theme.shapesAa
+                Behavior on radius { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
                 Text {
                     anchors.centerIn: parent
                     text: "‹"
@@ -87,7 +89,7 @@ NexusControls.PageBase {
                     antialiasing: Theme.textAa
                     renderType: Theme.textRenderType
                 }
-                Ui.StateLayer { id: backMouse; radius: 20; color: Theme.textPrimary; onClicked: root.back() }
+                Ui.StateLayer { id: backMouse; radius: parent.radius; color: Theme.textPrimary; onClicked: root.back() }
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter

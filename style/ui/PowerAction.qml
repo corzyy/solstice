@@ -1,6 +1,6 @@
 // PowerAction — session-action button shared by the power menu
-// (panels/PowerPanel.qml) and the lockscreen's merge replica
-// (overlays/Lockscreen.qml).
+// (shell/panels/PowerPanel.qml) and the lockscreen's merge replica
+// (shell/overlays/Lockscreen.qml).
 //
 // Idle: round MaterialShape background with a glyph, label underneath.
 // Hover (interactive only): the circle morphs into a random M3 expressive

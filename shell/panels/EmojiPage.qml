@@ -2,9 +2,9 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
-import "../themes"
-import "../ui"
-import "../assets/emoji_data.js" as EmojiData
+import "../../style/themes"
+import "../../style/ui"
+import "./emoji_data.js" as EmojiData
 
 // Emoji picker page of the launcher, reached through the prefix menu
 // ("!emoji " by default). The search bar stays visible: the text after the

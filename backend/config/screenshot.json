@@ -1,6 +1,6 @@
 {
     "copyToClipboard": true,
-    "defaultMode": "region",
+    "defaultMode": "window",
     "includeCursor": true,
     "notify": true,
     "saveDir": ""

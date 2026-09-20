@@ -10,7 +10,7 @@ set -u
 
 MODE="${1:-}"
 if [ "$MODE" != "dark" ] && [ "$MODE" != "light" ]; then
-  MODE="$(jq -r '.mode // "dark"' "$HOME/.config/quickshell/solstice/themes/matugen_settings.json" 2>/dev/null || echo dark)"
+  MODE="$(jq -r '.mode // "dark"' "$HOME/.config/quickshell/solstice/style/themes/matugen_settings.json" 2>/dev/null || echo dark)"
 fi
 if [ "$MODE" != "dark" ] && [ "$MODE" != "light" ]; then MODE="dark"; fi
 
@@ -88,7 +88,7 @@ WANT_SCHEME="'$COLOR_SCHEME'"
 
 # solstice Application Theming → "Sync Mode with Portal": when disabled, leave the
 # portal color-scheme alone (mirrors DMS syncModeWithPortal).
-SYNC="$(jq -r '.syncModeWithPortal // true' "$HOME/.config/quickshell/solstice/config/theming_settings.json" 2>/dev/null || echo true)"
+SYNC="$(jq -r '.syncModeWithPortal // true' "$HOME/.config/quickshell/solstice/backend/config/theming_settings.json" 2>/dev/null || echo true)"
 
 THEME_CHANGED=false
 if [ "$CUR_THEME" != "$WANT_THEME" ]; then

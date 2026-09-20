@@ -27,7 +27,7 @@ FIELDS = {
     "layout": (("layout", "mode"), "dwindle"),
     "gap": (("layout", "gap"), 10),
     "borderWidth": (("appearance", "border_width"), 3),
-    "cornerRadius": (("appearance", "corner_radius"), 10),
+    "cornerRadius": (("appearance", "corner_radius"), 20),
     "blur": (("appearance", "blur", "enabled"), True),
     "blurOptimized": (("appearance", "blur", "optimized"), True),
     "shadows": (("appearance", "shadow", "enabled"), False),

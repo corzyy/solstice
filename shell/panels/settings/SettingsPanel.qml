@@ -4,9 +4,9 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import M3Shapes
-import "../../themes"
-import "../../services"
-import "../../ui"
+import "../../../style/themes"
+import "../../../backend/services"
+import "../../../style/ui"
 import "./pages" as Pages
 
 // Settings window — 1:1 Caelestia Nexus port (caelestia-dots/shell):
@@ -49,18 +49,9 @@ Scope {
 
     // Page registry (id + title + description + category). Categories only
     // create the group gaps / corner treatment in the nav list, like Nexus.
-    readonly property var navEntries: [
-        {id: "wallpaper", title: "Wallpaper & style", icon: "󰋩", desc: "Wallpaper, fonts, colours", category: "appearance"},
-        {id: "network", title: "Network & internet", icon: "󰖩", desc: "Wi-Fi, Ethernet, DNS", category: "connectivity"},
-        {id: "bluetooth", title: "Bluetooth", icon: "󰂯", desc: "Devices, pairing, power", category: "connectivity"},
-        {id: "audio", title: "Sound", icon: "󰕾", desc: "Volume, output & input devices", category: "connectivity"},
-        {id: "global", title: "Appearance", icon: "󰔎", desc: "Rounding, animations, fonts", category: "device"},
-        {id: "umbriel", title: "Compositor", icon: "󰖔", desc: "Layout, gaps, borders", category: "device"},
-        {id: "panels", title: "Panels", icon: "󰍹", desc: "Taskbar and shell surfaces", category: "shell"},
-        {id: "apps", title: "Apps", icon: "󰀻", desc: "Terminal, shell prompt", category: "system"},
-        {id: "setup", title: "Setup", icon: "󰒓", desc: "Date & time, language, keybinds, updates", category: "system"},
-        {id: "about", title: "About", icon: "󰋼", desc: "System information", category: "system"}
-    ]
+    // Lives in backend/services/SettingsRegistry: the launcher searches the
+    // same pages (the settings app has no .desktop entry).
+    readonly property var navEntries: SettingsRegistry.entries
     // M3 expressive shape pool for the current entry's icon container, same
     // pool as the power menu (PowerAction.shapeChoices). Each entry re-rolls
     // (never twice in a row) when it becomes the current page; MaterialShape
@@ -115,6 +106,14 @@ Scope {
         // to the list); in wide mode both panes stay visible so this is inert.
         pagePane = true
     }
+    // Publish the current page's glyph for the bar's workspace module, which
+    // draws the settings window (org.quickshell/Settings) with the icon of
+    // the page being shown.
+    function publishBarGlyph(): void {
+        Theme.settingsAppIcon = entryFor(section).icon
+    }
+    onSectionChanged: publishBarGlyph()
+    Component.onCompleted: publishBarGlyph()
 
     function pageFor(s: string): Component {
         switch (s) {
@@ -640,11 +639,32 @@ Scope {
         }
     }
     Component { id: networkComp; Pages.NetworkPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
-    Component { id: bluetoothComp; Pages.BluetoothPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
+    // Connected Devices owns the device / pairing sub-views: while one is open
+    // its own back row steps back to the saved list; only at the main view
+    // does the compact header back return to the category list, so PageBase's
+    // back button stays hidden in a sub-view to avoid a second button.
+    Component {
+        id: bluetoothComp
+        Pages.BluetoothPage {
+            id: bluetoothPage
+            showBack: settingsScope.compact && bluetoothPage.view === ""
+            onBackRequested: settingsScope.pagePane = false
+        }
+    }
     Component { id: globalComp; Pages.GlobalPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
     Component { id: umbrielComp; Pages.UmbrielPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
     Component { id: audioComp; Pages.AudioPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
-    Component { id: appsComp; Pages.AppsPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
+    // AppsPage drills into its own Library sub-pages (All apps / app detail):
+    // while drilled in, its in-page back row steps back; only at the overview
+    // does the compact header back return to the category list.
+    Component {
+        id: appsComp
+        Pages.AppsPage {
+            id: appsPage
+            showBack: settingsScope.compact && appsPage.view === ""
+            onBackRequested: settingsScope.pagePane = false
+        }
+    }
     // PanelsPage drills into its own sub-pages: while drilled in, its single
     // in-page back row (both layouts) steps out of the panel; only at the
     // picker does the compact back return to the category list, so PageBase's
@@ -659,8 +679,8 @@ Scope {
     }
     Component { id: workspacesComp; Pages.WorkspacesPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
     Component { id: aboutComp; Pages.AboutPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
-    // SetupPage drills into its own Date & Time / Language & Region / Keybinds / Update
-    // sub-pages: while drilled in the in-page back row steps back to the main view; only at
+    // SetupPage drills into its own Date & Time / Language & Region / Keybinds / Experimental /
+    // Update sub-pages: while drilled in the in-page back row steps back to the main view; only at
     // the main view does the compact back return to the category list, so
     // PageBase's header back must stay hidden in a sub-view to avoid a
     // second button.

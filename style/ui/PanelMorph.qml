@@ -1,4 +1,4 @@
-// PanelMorph — handoff state for cross-panel morphs (ui/CaelestiaPopout).
+// PanelMorph — handoff state for cross-panel morphs (style/ui/CaelestiaPopout).
 //
 // shell.qml calls begin(from, to, direction) just before it flips
 // activePanel; begin() stays inactive for a cold open, so the handoff only

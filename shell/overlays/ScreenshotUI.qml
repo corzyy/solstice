@@ -12,10 +12,10 @@
 //
 // Opened by the PRINT keybind (`solstice module screenshot toggle`), dismissed
 // by Escape, the close button, the toggle again, a lock or an opening bar
-// panel. The backend is scripts/screenshot.sh: the shot lands in the
+// panel. The backend is backend/scripts/screenshot.sh: the shot lands in the
 // configured folder (default ~/Pictures/Screenshots), on the clipboard and
 // as a notification — all three controlled by Settings > Panels >
-// Screenshot UI (config/screenshot.json).
+// Screenshot UI (backend/config/screenshot.json).
 //
 // Expressive vocabulary: pill container, connected segmented mode switch
 // with a sliding accent indicator and a springy overshoot open run
@@ -29,9 +29,9 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import "../themes"
-import "../services"
-import "../ui"
+import "../../style/themes"
+import "../../backend/services"
+import "../../style/ui"
 
 Scope {
     id: scope
@@ -191,13 +191,13 @@ Scope {
     function runCapture(): void {
         if (captureProc.running) return
         const geo = scope.mode === "window" ? scope.pickedGeometry : ""
-        captureProc.command = ["bash", Quickshell.shellDir + "/scripts/screenshot.sh", scope.mode, geo]
+        captureProc.command = ["bash", Quickshell.shellDir + "/backend/scripts/screenshot.sh", scope.mode, geo]
         captureProc.running = true
     }
     Process {
         id: captureProc
         // Output options come from Settings > Panels > Screenshot UI
-        // (config/screenshot.json).
+        // (backend/config/screenshot.json).
         environment: ({
             SOLSTICE_SHOT_DIR: Theme.screenshotSaveDir,
             SOLSTICE_SHOT_CURSOR: Theme.screenshotIncludeCursor ? "1" : "0",

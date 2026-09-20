@@ -4,9 +4,9 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
-import "../themes"
-import "../services"
-import "../ui"
+import "../../style/themes"
+import "../../backend/services"
+import "../../style/ui"
 
 // UpdateCenterView — the update-center body (header, bulk action, list,
 // empty state) shared by UpdateCenterPanel (standalone popout) and the
@@ -35,7 +35,7 @@ Column {
         ? "Last check: " + lastChecked.toLocaleString(I18n.formatLocale,
             I18n.location === "DE" ? "ddd, d. MMM · HH:mm" : "ddd, d MMM · HH:mm")
         : "Not checked yet"
-    readonly property string updateScript: Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/update.sh"
+    readonly property string updateScript: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/scripts/update.sh"
     property bool listExpanded: false
     property var selectedKeys: ({})
 

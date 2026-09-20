@@ -3,8 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import "../themes"
-import "../ui"
+import "../../style/themes"
+import "../../style/ui"
 
 Scope {
     id: scope

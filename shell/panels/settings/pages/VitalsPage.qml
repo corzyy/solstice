@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
-import "../../../services"
+import "../../../../style/themes"
+import "../../../../backend/services"
 import ".."
 
 NexusControls.PageBase {

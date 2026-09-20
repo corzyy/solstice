@@ -146,7 +146,9 @@ Singleton {
             if (!b || a.address !== b.address || a.name !== b.name
                 || a.deviceName !== b.deviceName || a.connected !== b.connected
                 || a.paired !== b.paired || a.bonded !== b.bonded
-                || a.trusted !== b.trusted || a.pairing !== b.pairing
+                || a.trusted !== b.trusted || a.blocked !== b.blocked
+                || a.wakeAllowed !== b.wakeAllowed
+                || a.pairing !== b.pairing
                 || a.state !== b.state || a.batteryAvailable !== b.batteryAvailable
                 || a.battery !== b.battery || !!a.stale !== !!b.stale) return false
         }
@@ -198,6 +200,49 @@ Singleton {
         root.clearError();
         if (root.adapter !== null)
             root.adapter.enabled = !root.adapter.enabled;
+    }
+
+    // Adapter visibility (page toggles).
+    readonly property bool btDiscoverable: !!adapter && adapter.discoverable;
+    readonly property bool btPairable: !!adapter && adapter.pairable;
+    function setDiscoverable(value: bool): void {
+        root.clearError();
+        if (root.adapter !== null) {
+            try { root.adapter.discoverable = value; } catch (e) {}
+        }
+    }
+    function setPairable(value: bool): void {
+        root.clearError();
+        if (root.adapter !== null) {
+            try { root.adapter.pairable = value; } catch (e) {}
+        }
+    }
+
+    // Per-device flags (page toggles). Projection rows are plain data, so
+    // resolve the live object by address and re-sync for instant feedback.
+    function setDeviceTrusted(address: string, value: bool): void {
+        let dev = deviceByAddress(address);
+        if (!dev)
+            return;
+        root.clearError();
+        try { dev.trusted = value; } catch (e) {}
+        syncDevices();
+    }
+    function setDeviceBlocked(address: string, value: bool): void {
+        let dev = deviceByAddress(address);
+        if (!dev)
+            return;
+        root.clearError();
+        try { dev.blocked = value; } catch (e) {}
+        syncDevices();
+    }
+    function setDeviceWakeAllowed(address: string, value: bool): void {
+        let dev = deviceByAddress(address);
+        if (!dev)
+            return;
+        root.clearError();
+        try { dev.wakeAllowed = value; } catch (e) {}
+        syncDevices();
     }
 
     // ---- Device lookup + actions ----

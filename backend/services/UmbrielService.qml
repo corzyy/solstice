@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../themes"
+import "../../style/themes"
 
 // UmbrielService — Umbriel (wlroots-based) compatibility layer for the bar's
 // Workspaces and ActiveWindow widgets. Exposes the workspace API shape
@@ -533,14 +533,14 @@ Singleton {
 
     // ---- appearance settings (shell-managed configs/shell.toml) ----
     // The Appearance > Umbriel settings page edits these. Persistence goes
-    // through scripts/umbriel-apply.py, which rewrites the optional include
+    // through backend/scripts/umbriel-apply.py, which rewrites the optional include
     // configs/shell.toml and asks Umbriel to reload. Defaults match the
     // hand-written configs; syncAppearance() loads the effective values.
     property bool umbAppearanceLoaded: false
     property string umbLayout: "dwindle"
     property int umbGap: 10
     property int umbBorderWidth: 3
-    property int umbCornerRadius: 10
+    property int umbCornerRadius: 20
     property bool umbBlurEnabled: true
     property bool umbBlurOptimized: true
     // Shell layer override (configs/shell.toml): one cached backdrop shared by
@@ -562,7 +562,7 @@ Singleton {
     property int umbAnimDurMove: 500
     property int umbAnimDurWorkspace: 400
 
-    readonly property string _applyScript: Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/umbriel-apply.py"
+    readonly property string _applyScript: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/scripts/umbriel-apply.py"
 
     function _clampInt(v: var, lo: int, hi: int, fb: int): int {
         let n = Math.round(Number(v))

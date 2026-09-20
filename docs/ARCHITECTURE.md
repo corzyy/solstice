@@ -4,12 +4,14 @@
 Top-level directories are named after their role, not their origin. `shell.qml` is
 the only file in the root; everything else lives in exactly one zone:
 
-- **UI zones** — `bar/` (the bar), `panels/` (everything that pops out of it),
-  `overlays/` (resident fullscreen surfaces: lockscreen, notifications, polkit, OSD).
-- **Infrastructure** — `services/` (backends), `themes/` (Theme singleton + presets),
-  `ui/` (shared visual toolkit), `util/` (pure helpers).
-- **Data & tooling** — `assets/`, `config/` (user settings, stable paths),
-  `scripts/`, `docs/`, `logs/`.
+- **Shell zone** — `shell/` (all UI surfaces): `bar/` (the bar), `panels/`
+  (popouts: control center, settings) and `overlays/` (resident fullscreen
+  surfaces: lockscreen, notifications, polkit, OSD).
+- **Backend zone** — `backend/`: `services/` (backend singletons, no UI), `config/`
+  (user settings & state, stable paths), `scripts/` (appliers, CLI, helpers).
+- **Style zone** — `style/`: `themes/` (Theme singleton + presets),
+  `ui/` (shared visual toolkit + `Util` pure helpers).
+- **Data & tooling** — `docs/` (incl. screenshot.png), `logs/`.
 
 ## File Tree
 ```
@@ -19,129 +21,145 @@ solstice/
 │                             closePanels/toggleExclusive, panel morph driver,
 │                             IpcHandler solstice)
 │
-├── bar/                   — top bar (was modules/TopBar + modules/bar)
-│   ├── TopBar.qml         — bar shell: layout slots, delegates
-│   │                         (`import "./widgets" as Bar`)
-│   └── widgets/           — bar atoms: LauncherIcon (OS logo), Workspaces,
-│                             Clock, ActiveWindow, SystemTray,
-│                             ControlCenterWidget,
-│                             BarModule (delegate host) + BarWidgetBase + BarSlot
+├── shell/                 — all UI surfaces (shell.qml: `"./shell/bar" as Bar`,
+│                             `"./shell/panels" as Panels`, `"./shell/overlays" as Overlays`)
+│   ├── bar/               — top bar (was modules/TopBar + modules/bar)
+│   │   ├── TopBar.qml     — bar shell: layout slots, delegates
+│   │   │                     (`import "./widgets" as Bar`)
+│   │   └── widgets/       — bar atoms: LauncherIcon (OS logo), Workspaces,
+│   │                         Clock, ActiveWindow, SystemTray,
+│   │                         ControlCenterWidget,
+│   │                         BarModule (delegate host) + BarWidgetBase + BarSlot
+│   │
+│   ├── panels/            — popout panels (`import "./shell/panels" as Panels`)
+│   │   ├── CalendarPanel.qml  — calendar + notification history (was CalendarMenu)
+│   │   ├── CalendarModel.js
+│   │   ├── LauncherPanel.qml  — app search popup (bar OS icon / SUPER+SPACE)
+│   │   ├── PowerPanel.qml     — Android-style power menu (standalone modal:
+│   │   │                         dimmed + compositor-blurred backdrop, centred
+│   │   │                         card with Lock/Logout/Restart/Shutdown)
+│   │   ├── BluetoothPanel.qml — CC drill-in (showBack mode)
+│   │   ├── SystemTrayPanel.qml, UpdateCenterPanel.qml (+ UpdateCenterView.qml body),
+│   │   │                         EmojiPage.qml + emoji_data.js
+│   │   ├── controlcenter/     — `import "./shell/panels/controlcenter" as Cc`
+│   │   │   ├── ControlCenterPanel.qml — CC card, tile/slider editing
+│   │   │   ├── AudioPanel.qml         — CC audio drill-in
+│   │   │   └── MediaPlayerCard.qml, QuickToggle.qml, CcSlider.qml
+│   │   └── settings/          — settings window (`"./shell/panels/settings" as Settings`)
+│   │       ├── SettingsPanel.qml  — Android 17 / M3E window: nav list with pastel
+│   │       │                         icon badges + page slots (enter/leave hooks)
+│   │       ├── NexusControls.qml  — M3E control kit (grouped cards, icon badges,
+│   │       │                         switches, dropdowns, sliders, SearchBar,
+│   │       │                         PageBase, PreviewTile)
+│   │       ├── ThemeEngine.qml    — preset/monet applies + per-theme wallpaper
+│   │       │                         memory (driven by Wallpaper & style)
+│   │       └── pages/             — one page per section (Wallpaper & style
+│   │                                 (default landing page: recent carousel,
+│   │                                 live preview, Wallpapers/Colours/Fonts
+│   │                                 sub-views), Network, Connected Devices
+│   │                                 (Bluetooth: saved devices, pairing and
+│   │                                 per-device sub-views),
+│   │                                 Global, Umbriel, Audio,
+│   │                                 Apps (default applications; library:
+│   │                                 All apps with a shared detail page +
+│   │                                 App Theming),
+│   │                                 Panels
+│   │                                 (taskbar editor incl. M3E module layout,
+│   │                                 Launcher page, Screenshot UI page),
+│   │                                 Workspaces, Calendar, Notifications,
+│   │                                 About, Setup)
+│   │
+│   └── overlays/          — resident surfaces, always instantiated (trigger listeners)
+│       ├── Lockscreen.qml     — blurred-wallpaper lock overlay: centered clock+PIN
+│       │                         card, merge-morphs out of the power menu card
+│       │                         (always mapped, input-masked while unlocked)
+│       ├── Notifications.qml (toast shell), Polkit.qml (agent),
+│       ├── VolumeOSD.qml      — OSD card: volume + Umbriel layout switches + theme applies
+│       ├── DebugOverlay.qml   — opt-in FPS readout (Experimental page; debug.json)
+│       └── ScreenshotUI.qml   — bottom pill: region / window / fullscreen capture
+│                                   (PRINT; backend/scripts/screenshot.sh)
 │
-├── panels/                — popout panels (`import "./panels" as Panels`)
-│   ├── CalendarPanel.qml  — calendar + notification history (was CalendarMenu)
-│   ├── CalendarModel.js
-│   ├── LauncherPanel.qml  — app search popup (bar OS icon / SUPER+SPACE)
-│   ├── PowerPanel.qml     — Android-style power menu (standalone modal:
-│   │                         dimmed + compositor-blurred backdrop, centred
-│   │                         card with Lock/Logout/Restart/Shutdown)
-│   ├── BluetoothPanel.qml — CC drill-in (showBack mode)
-│   ├── SystemTrayPanel.qml, UpdateCenterPanel.qml (+ UpdateCenterView.qml body)
-│   ├── controlcenter/     — `import "./panels/controlcenter" as Cc`
-│   │   ├── ControlCenterPanel.qml — CC card, tile/slider editing
-│   │   ├── AudioPanel.qml         — CC audio drill-in
-│   │   ├── MediaPlayerCard.qml, QuickToggle.qml, CcSlider.qml
-│   └── settings/          — settings window (`import "./panels/settings" as Settings`)
-│       ├── SettingsPanel.qml  — Android 17 / M3E window: nav list with pastel
-│       │                         icon badges + page slots (enter/leave hooks)
-│       ├── NexusControls.qml  — M3E control kit (grouped cards, icon badges,
-│       │                         switches, dropdowns, sliders, SearchBar,
-│       │                         PageBase, PreviewTile)
-│       ├── ThemeEngine.qml    — preset/monet applies + per-theme wallpaper
-│       │                         memory (driven by Wallpaper & style)
-│       └── pages/             — one page per section (Wallpaper & style
-│                                 (default landing page: recent carousel,
-│                                 live preview, Wallpapers/Colours/Fonts
-│                                 sub-views), Network, Bluetooth,
-│                                 Global, Umbriel, Audio, Apps, Panels
-│                                 (taskbar editor incl. M3E module layout,
-│                                 Launcher page, Screenshot UI page),
-│                                 Workspaces, Calendar, Notifications,
-│                                 About, Setup)
+├── backend/               — non-UI foundation (shell.qml: `import "./backend/services"`)
+│   ├── services/          — singletons, no UI (`import "../backend/services"` from shell/)
+│   │   ├── qmldir         — singleton registrations
+│   │   ├── HistoryService.qml — notification history (max 100)
+│   │   ├── InstanceGuard.qml  — single-instance check (backend/scripts/instance-check.sh);
+│   │   │                         duplicates exit before registering notification server / polkit
+│   │   ├── LogService.qml     — persistent error log (backend/scripts/log-errors.sh →
+│   │   │                         logs/errors.log; record() for shell-raised errors)
+│   │   ├── UpdateService.qml  — dnf+flatpak polling (backend/scripts/check-updates.sh)
+│   │   ├── NetworkService.qml — nmcli poll every 4s (bar icon only)
+│   │   ├── BluetoothService.qml (+ BluetoothModel.js)
+│   │   ├── VolumeService.qml  — Pipewire.defaultAudioSink + fallback backend/scripts/volume.sh
+│   │   ├── WallpaperService.qml — wallpaper scan, swaybg display switch, recent
+│   │   │                         ring (backend/config/recent_wallpapers.json); used
+│   │   │                         by the Settings Wallpaper & style page
+│   │   ├── VitalsService.qml,
+│   │   ├── SettingsService.qml — backend/config/settings.json persistence + apply scripts
+│   │   ├── SettingsRegistry.qml — settings nav/page registry (nav rail + launcher search entries)
+│   │   ├── I18n.qml           — shell language (JS dictionaries, en/de) + format
+│   │   │                         region (QLocale for date/number labels);
+│   │   │                         backend/config/language.json
+│   │   └── UmbrielService.qml  — Umbriel (niri) integration
+│   │
+│   ├── config/            — canonical user settings & state (FileView watchers)
+│   │   ├── topbar_settings.json, controlcenter.json, vitals.json,
+│   │   │   bar_layout.json, bar_labels.json, bar_backgrounds.json, tray.json,
+│   │   │   notifications.json,
+│   │   │   calendar.json, dnd.json, gamemode.json, font_settings.json,
+│   │   │   settings.json, default_apps.json, theming_settings.json, volume.json, language.json,
+│   │   │   screenshot.json, matugen_themes.json,
+│   │   └── current_wallpaper.txt, wallpaper_settings.json, pin
+│   │
+│   └── scripts/           — shell scripts + python appliers (solstice CLI,
+│                             update/update-shell, theming-apply, matugen-themes,
+│                             umbriel-apply, settings-apply, volume.sh,
+│                             screenshot.sh, …)
 │
-├── overlays/              — resident surfaces, always instantiated (trigger listeners)
-│   ├── Lockscreen.qml     — blurred-wallpaper lock overlay: centered clock+PIN
-│   │                         card, merge-morphs out of the power menu card
-│   │                         (always mapped, input-masked while unlocked)
-│   ├── Notifications.qml (toast shell), Polkit.qml (agent),
-│   ├── VolumeOSD.qml      — OSD card: volume + Umbriel layout switches + theme applies
-│   └── ScreenshotUI.qml   — bottom pill: region / window / fullscreen capture
-│                             (PRINT; backend scripts/screenshot.sh)
+├── style/                 — design system (shell.qml: `"./style/themes"`,
+│                             `"./style/ui" as Ui`)
+│   ├── themes/            — Theme singleton + theme-engine data (name kept for
+│   │   │                     snapshot compatibility with install/update scripts)
+│   │   ├── qmldir         — `singleton Theme 1.0 Theme.qml` (filesystem import)
+│   │   ├── Theme.qml      — palette + semantic aliases + persisted UI settings
+│   │   ├── matugen.json   — written by the matugen binary (see ~/.config/matugen)
+│   │   ├── matugen_settings.json, theme_engine.json + preset jsons
+│   │   └── snapshots/     — design-snapshots.py output (preserved on update)
+│   │
+│   └── ui/                — shared visual toolkit (was Ui/) + Util helper singleton
+│       ├── qmldir         — registrations (BarAnchor, PanelShell, MSlider, Util, …)
+│       ├── PanelShell/CaelestiaPopout/PanelSpring/PanelMorph
+│       │                     — bar popout open/close + cross-panel morph
+│       ├── Motion.qml/Anim.qml — M3 transition patterns (fade through, shared axis)
+│       ├── PanelKit.qml, PowerAction.qml, MSlider.qml, ScrollIndicator.qml,
+│       └── StateLayer.qml, IslandMorph.qml, BarAnchor.qml,
+│                             Util.qml (was Commons/: audio-name cleanup, icon
+│                             source resolution, shell escaping)
 │
-├── services/              — singletons, no UI (`import "./services"` or "../services")
-│   ├── qmldir             — singleton registrations
-│   ├── HistoryService.qml — notification history (max 100)
-│   ├── LogService.qml     — persistent error log (scripts/log-errors.sh →
-│   │                         logs/errors.log; record() for shell-raised errors)
-│   ├── UpdateService.qml  — dnf+flatpak polling (scripts/check-updates.sh)
-│   ├── NetworkService.qml — nmcli poll every 4s (bar icon only)
-│   ├── BluetoothService.qml (+ BluetoothModel.js)
-│   ├── VolumeService.qml  — Pipewire.defaultAudioSink + fallback scripts/volume.sh
-│   ├── WallpaperService.qml — wallpaper scan, swaybg display switch, recent
-│   │                         ring (config/recent_wallpapers.json); used by the
-│   │                         Settings Wallpaper & style page
-│   ├── VitalsService.qml,
-│   ├── SettingsService.qml — config/settings.json persistence + apply scripts
-│   ├── I18n.qml           — shell language (JS dictionaries, en/de) + format
-│   │                         region (QLocale for date/number labels);
-│   │                         config/language.json
-│   └── UmbrielService.qml  — Umbriel (niri) integration
-│
-├── themes/                — Theme singleton + theme-engine data (name kept for
-│   │                         snapshot compatibility with install/update scripts)
-│   ├── qmldir             — `singleton Theme 1.0 Theme.qml` (filesystem import)
-│   ├── Theme.qml          — palette + semantic aliases + persisted UI settings
-│   ├── matugen.json       — written by the matugen binary (see ~/.config/matugen)
-│   ├── matugen_settings.json, theme_engine.json + preset jsons
-│   └── snapshots/         — design-snapshots.py output (preserved on update)
-│
-├── ui/                    — shared visual toolkit (was Ui/)
-│   ├── qmldir             — registrations (BarAnchor, PanelShell, MSlider, …)
-│   ├── PanelShell/CaelestiaPopout/PanelSpring/PanelMorph
-│   │                         — bar popout open/close + cross-panel morph
-│   ├── Motion.qml/Anim.qml — M3 transition patterns (fade through, shared axis)
-│   ├── PanelKit.qml, PowerAction.qml, MSlider.qml, ScrollIndicator.qml,
-│   └── StateLayer.qml, IslandMorph.qml, BarAnchor.qml
-│
-├── util/                  — pure helpers (was Commons/): Util singleton
-│                             (`import "../util"` → audio-name cleanup, icon source
-│                             resolution, shell escaping)
-│
-├── config/                — canonical user settings & state (FileView watchers)
-│   ├── topbar_settings.json, controlcenter.json, vitals.json,
-│   │   bar_layout.json, bar_labels.json, bar_backgrounds.json, tray.json,
-│   │   notifications.json,
-│   │   calendar.json, dnd.json, gamemode.json, font_settings.json,
-│   │   settings.json, theming_settings.json, volume.json, language.json,
-│   │   screenshot.json,
-│   └── current_wallpaper.txt, wallpaper_settings.json, pin
-│
-├── assets/                — screenshots and images (screenshot.png)
-├── scripts/               — shell scripts + python appliers (see scripts/README-less:
-│                             solstice CLI, update/update-shell, theming-apply,
-│                             umbriel-apply, settings-apply, volume.sh, …)
 ├── logs/                  — runtime logs (git-ignored): errors.log, startup.log
-└── docs/                  — this file
+└── docs/                  — this file; screenshot.png
 ```
 
 ## Import system (no root qmldir)
 There is no root `qs` module. Singletons are registered per-directory via local
 `qmldir` files and imported as filesystem directories:
 
-- `import "./themes"` (or `"../themes"`, `"../../themes"`, …) → `Theme`
-- `import "./services"` → `HistoryService`, `UpdateService`, `NetworkService`, …
-- `import "./ui"` / `"../ui"` → `BarAnchor`, `PanelShell`, `MSlider`, `Ui.Motion`, …
-- `import "../util"` → `Util`
-- `import "../bar" as Bar` → `Bar.TopBar`; `import "./widgets" as Bar` inside TopBar
-- `import "./panels" as Panels` → `Panels.CalendarPanel`, …
-- `import "./panels/controlcenter" as Cc`, `"./panels/settings" as Settings`
-- `import "./overlays" as Overlays` → `Overlays.Lockscreen`, …
+- `import "./style/themes"` (or `"../style/themes"`, `"../../style/themes"`, …) → `Theme`
+- `import "./backend/services"` (or `"../backend/services"`, `"../../backend/services"`, …)
+  → `HistoryService`, `UpdateService`, `NetworkService`, …
+- `import "./style/ui"` / `"../style/ui"` → `BarAnchor`, `PanelShell`, `MSlider`, `Util`, `Ui.Motion`, …
+- `import "./shell/bar" as Bar` → `Bar.TopBar`; `import "./widgets" as Bar` inside TopBar
+- `import "./shell/panels" as Panels` → `Panels.CalendarPanel`, …
+- `import "./shell/panels/controlcenter" as Cc`, `"./shell/panels/settings" as Settings`,
+  `"./shell/overlays" as Overlays` → `Overlays.Lockscreen`, …
 
 Rules learned the hard way:
 - Never bare-import a directory whose subdirectory is also bare-imported in the same
   file (nondeterministic "X is not a type" in quickshell) — namespace those imports
   (`as Cc`).
-- `themes/`, `services/`, `ui/`, `util/` are top-level siblings: safe to bare-import
-  everywhere.
+- `style/themes`, `style/ui`, `backend/services` are the shared library targets:
+  safe to bare-import everywhere (path depth adjusted per file). Inside
+  `style/`, `ui/` reaches Theme as the sibling `"../themes"`.
 - A file can use types from its own directory without an import; that is how
   SettingsPanel reaches NexusControls and its pages reach ThemeEngine via
   `import ".."`.
@@ -176,11 +194,11 @@ Rules learned the hard way:
   names and bar module ids (settings excluded — it is not part of the exclusive state).
 
 ## Settings paths
-All FileView watchers and scripts use `~/.config/quickshell/solstice/config/<name>.json`
-plus `config/current_wallpaper.txt` and `config/pin`. Theme-engine data stays in
-`themes/` (matugen writes `themes/matugen.json` per ~/.config/matugen/config.toml),
-snapshots in `themes/snapshots/`.
-Init pattern: `mkdir -p ~/.config/quickshell/solstice/config; if [ ! -f … ]; then echo
+All FileView watchers and scripts use `~/.config/quickshell/solstice/backend/config/<name>.json`
+plus `backend/config/current_wallpaper.txt` and `backend/config/pin`. Theme-engine data stays in
+`style/themes/` (matugen writes `style/themes/matugen.json` per ~/.config/matugen/config.toml),
+snapshots in `style/themes/snapshots/`.
+Init pattern: `mkdir -p ~/.config/quickshell/solstice/backend/config; if [ ! -f … ]; then echo
 default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over existing json.
 
 ## Conventions
@@ -351,7 +369,9 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    page's boot re-sync) and
    `bar/widgets/LauncherIcon.qml` (distro glyph from /etc/os-release, Nerd
    Font nf-linux-* map, Tux fallback; background synced to the Workspaces card
-   via Theme.barBackgroundEnabled). Panel state: shell.qml enum `launcher`,
+   via Theme.barBackgroundEnabled, until "Launcher button sync"
+   (`workspaceLauncherSync` in topbar_settings.json, Workspaces settings,
+   visible while Background is on) is turned off). Panel state: shell.qml enum `launcher`,
    PanelLoader, `toggleLauncher/showLauncher/hideLauncher` IPC (centered arg),
    `panelForName`/`panelForModule`/`panelMorphId` entries, TopBar
    `launcherOpen`/`toggleLauncher` and BarSlot/BarModule `requestLauncher`.
@@ -596,6 +616,244 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    Umbriel groups and the remaining compositor binds. `SetupPage` lost the
    Compositor section, its NavRow and the `"compositor"` sub-view; the shell
    Keybinds row now reads "Shell actions and compositor shortcuts".
+
+- 2026-09-19 (later): root cleanup — `util/` merged into `ui/` (`Util`
+   singleton registered in `ui/qmldir`; importers now use `"../ui"`),
+   `assets/` dissolved (`emoji_data.js` → `panels/emoji_data.js`, imported as
+   `"./emoji_data.js"`, generator output path updated; `screenshot.png` →
+   `docs/screenshot.png`), and `overlays/` moved under `panels/overlays/`
+   (relative imports one level deeper; shell.qml imports
+   `"./panels/overlays" as Overlays`). Root is now: bar, config, docs, logs,
+   panels, scripts, services, themes, ui + shell.qml.
+
+- 2026-09-19 (later): UI zones grouped under `shell/` — `bar/` and `panels/`
+   moved under `shell/` (their relative imports gained one level), and
+   `panels/overlays/` moved back out to `shell/overlays/` (sibling of panels;
+   depth unchanged, imports untouched). shell.qml now imports
+   `"./shell/bar"`, `"./shell/panels"`, `"./shell/panels/controlcenter"`,
+   `"./shell/panels/settings"`, `"./shell/overlays"`. Root is now: config,
+   docs, logs, scripts, services, shell, themes, ui + shell.qml.
+
+- 2026-09-19 (later): `config/` + `services/` merged under `backend/` —
+   shell.qml imports `"./backend/services"`; all QML importers gained
+   `backend/` before `services`; every runtime config path moved to
+   `~/.config/quickshell/solstice/backend/config/` (FileView watchers, shell
+   commands, IPC-time paths, scripts: theming-apply, matugen-run, apply-gtk,
+   lock-auth, design-snapshots, screenshot, log-errors); install.sh and
+   update-shell.sh preserve `backend/config/` on update. Root is now: backend,
+   docs, logs, scripts, shell, themes, ui + shell.qml.
+
+- 2026-09-19 (later): `scripts/` moved under `backend/scripts/` — shellDir +
+   HOME-based script paths updated across QML; solstice CLI repo-root lookup
+   (now two levels up), generate-emoji-data.py output path, install.sh /
+   update-shell.sh chmod targets and README updated. Docs still show
+   historical `scripts/` paths for pre-move events.
+
+- 2026-09-19 (later): `themes/` + `ui/` merged under `style/` — all QML imports
+   became `".../style/themes"` / `".../style/ui"`; `style/ui` keeps the sibling
+   import `"../themes"`. Absolute theme-engine paths
+   (`~/.config/quickshell/solstice/style/themes/...`) updated in Theme.qml,
+   ThemeEngine.qml, render-everforest.py, theming-apply.py, apply-gtk.sh,
+   design-snapshots.py; install.sh/update-shell.sh preserve
+   `style/themes/snapshots/`. Root is now: backend, docs, logs, shell, style +
+   shell.qml.
+
+- 2026-09-20: Settings > Setup gains an Experimental page
+   (`shell/panels/settings/pages/ExperimentalPage.qml`, sub-view
+   `"experimental"` in SetupPage, second Shell row) with a Vulkan renderer
+   toggle. The active backend comes from `GraphicsInfo.api` (the RHI backend
+   of the settings window, retried until the scene graph reports it).
+   Toggling pins `QSG_RHI_BACKEND` in `backend/config/gpu.conf` through the
+   new `backend/scripts/set-renderer.sh` (replaces an active pin, appends one
+   otherwise) and, when it differs from the running backend, restarts through
+   the launcher. `backend/scripts/solstice` gained `restart` (kill, wait for
+   exit, then `boot_shell`, which re-sources gpu.conf), so the backend is
+   picked up without a re-login.
+
+- 2026-09-20 (later): Panels → Taskbar gains a "Size and gaps" drill-in at the
+   bottom (Layout section): taskbar size (`thickness`), module size,
+   spacing between modules (`moduleSpacing`), content padding
+   (`contentPadding`) and the screen-edge paddings (`topDistance` screen gap,
+   `edgeDistance` side padding), all as live SliderRows. Theme gains
+   `moduleSize` in `config/topbar_settings.json` + `Theme.barModuleSize`/
+   `setBarModuleSize`: 0 keeps the automatic card extent (thickness − 4), a
+   positive value pins the uniform background-card cross axis, capped to the
+   bar's cross axis − 2 so a card can never paint outside the bar surface.
+
+- 2026-09-20 (later): Settings gains "App Theming" between Appearance and
+   Compositor (`shell/panels/settings/pages/AppThemingPage.qml`, registered in
+   `backend/services/SettingsRegistry` + `SettingsPanel.pageFor`):
+   a browser for the InioX/matugen-themes application template collection.
+   `backend/config/matugen_themes.json` holds the curated catalogue
+   (~64 entries with remote file, local template path, output path, post_hook,
+   theming toggle, note; manual entries are download-only), served as JSON by
+   `backend/scripts/matugen-themes.py` (`list`/`install`/`remove`). Installed
+   detection = the entry's `[templates.*]` blocks exist in
+   `~/.config/matugen/config.toml`; active = the matching
+   `theming_settings.json` toggle is not false; the "Installed" section lists
+   them on top, available entries are grouped by category below a page filter.
+   Clicking install downloads the upstream template into
+   `~/.config/matugen/templates`, appends the block (absolute paths, escaped
+   post_hook) and enables the toggle; the page then re-applies the active
+   engine through its ThemeEngine (`monetCurrent` for wallpaper mode or
+   `preset:<engine>`, both silent) so the app output renders immediately.
+   Remove drops the block again (blank separator included, byte-identical
+   round trip) and tears down the program side for every entry: the app's
+   generated theme file(s) are deleted, optional per-entry `cleanup` paths
+   cover side artifacts (foot's colours symlink), and ancestors that hold no
+   files at all are pruned (PrismLauncher's themes/Matugen incl. its empty
+   resources folder). A per-entry `remove_hook` then reverts live state
+   best-effort: notify daemons/monitors reload (kitty, ghostty, waybar, mako,
+   dunst, swaync, btop with color_theme reset to Default), GTK re-imports
+   without colors.css, GNOME resets its user-theme, compositor configs reload
+   (niri/sway/labwc/mango), spicetify/Steam re-apply, and wezterm's empty
+   touched wezterm.lua is dropped; hooks only run when the entry was actually
+   installed or left artifacts behind. Re-installing re-renders the theme.
+   Manual entries (Zen, Telegram, …) own only the downloaded template in
+   ~/.config/matugen/templates, which Remove deletes. Verified end to end
+   through the page (`quickshell -p` harness): list → install → remove, and
+   remove → install → apply → remove for PrismLauncher.
+
+- 2026-09-20 (later): The settings app is searchable from the launcher without
+   a .desktop entry. `SettingsPanel.navEntries` moved into the shared
+   `backend/services/SettingsRegistry` singleton (id/title/desc/icon/category
+   plus launcher keywords), and `LauncherPanel` builds built-in pseudo entries
+   from it (same `{name, comment, icon}` shape the app delegate renders): a
+   generic "Settings" row plus one row per page ("Settings · <desc>", icon =
+   nav glyph, `settingsSection` = page id). Every query word must match
+   name/comment/keywords; name hits (`settings`, `network`) list above the
+   apps, keyword-only hits (`wifi` -> Network & internet) below them, and
+   single-character queries only prefix-match so short queries don't bury the
+   app results. Activating a row emits `settingsRequested(section)`;
+   `launcherComp` in shell.qml closes the launcher and calls `openSettings()`
+   (empty section = the last shown page). The settings window itself never
+   appears in the desktop-entry list.
+
+- 2026-09-20 (later): The Apps page was rebuilt around default applications
+   and the app library (`shell/panels/settings/pages/AppsPage.qml`; the old
+   Kitty terminal / Fish prompt rows left the page). "Default applications"
+   offers terminal / browser / file manager dropdowns (strictly filtered by
+   the desktop categories TerminalEmulator / WebBrowser / FileManager;
+   solstice web apps declare WebBrowser but stay out of the browser list):
+   picking an app calls
+   `backend/scripts/apps-manage.py set-default`, which reads the .desktop
+   Exec line, rebinds `spawn:<command>` to the chord the previous command
+   held (Mod+Return / Mod+B / Mod+E fallback) through `umbriel-keybinds.py`
+   and lets Umbriel reload — the shortcut changes live; the pick is persisted
+   in `backend/config/default_apps.json` (`defaults` resolves it back for the
+   dropdowns, including the effective chord). "Library > All apps" lists
+   every launcher-visible desktop entry in one searchable list; a single
+   shared detail page (bound to `selectedAppId`, no per-app instance) opens,
+   hides or uninstalls the app. Hiding writes `launcher.json`'s new
+   `hiddenApps` array through `Theme.isAppHidden/setAppHidden` (rev counter
+   for binding invalidation) and `LauncherPanel.allApps` filters it.
+   `apps-manage.py info/uninstall` resolves the desktop file's owner:
+   rpm/dpkg/pacman packages are removed through the distro package manager
+   behind pkexec (the shell's polkit agent authenticates), flatpaks through
+   `flatpak uninstall`, solstice web apps through webapp-remove.sh and
+   user-local launcher entries by deleting the file. All page commands run
+   as JSON processes and report inline + through the theme OSD.
+
+- 2026-09-20 (later): The Keybinds page (Setup > Keybinds) gained an
+   "Applications" group mirroring the Apps page default applications:
+   `KeybindsPage` loads the same `apps-manage.py defaults` state
+   (`refresh()` runs it beside the keybind list) and renders "Launch
+   Terminal / Web Browser / File Manager" rows bound to the current
+   `spawn:<command>` action, subtext = default kind + app name. Changing an
+   app on the Apps page therefore relabels its shortcut row; the raw spawn
+   binds no longer fall into "Other binds", and an unbound default still gets
+   a rebindable "Not bound" row.
+
+- 2026-09-20 (later): App Theming moved from the nav rail into the Apps page
+   (Apps > Library > App Theming). The page is unchanged
+   (`AppThemingPage.qml`, now loaded as AppsPage's "theming" sub-view with
+   `showTitle: false`; `Component.onCompleted` refreshes it because the
+   nested `pageEntered` hook never fires). The SettingsRegistry "theming"
+   entry and the `SettingsPanel.pageFor` case are gone — the nav rail no
+   longer lists it and `openSettings("theming")` maps to "apps" at the shell
+   level. The matugen/theming launcher keywords moved to the Apps entry.
+
+- 2026-09-20 (later): Settings > Setup > Experimental gains a "Debug" group
+   with an FPS overlay toggle (persisted as `fpsOverlay` in the new
+   `backend/config/debug.json`, default off;
+   `Theme.debugFpsEnabled`/`setDebugFpsEnabled` use the usual FileView +
+   setAdapterBool pattern). The overlay
+   (`shell/overlays/DebugOverlay.qml`, instantiated in shell.qml beside the
+   OSDs) is a primary-screen WlrLayer.Overlay PanelWindow in the bottom-right
+   corner, shifted clear of the bar on bottom/right positions, fully
+   input-transparent (empty Region mask) and cost-free while the toggle is
+   off (window unmap + ticker stopped). A FrameAnimation keeps the card's
+   surface on the compositor frame clock and its smoothFrameTime/frameTime
+   render "NN FPS" (large) over the last frame's milliseconds, so GUI-thread
+   stalls show up as dropped frames. `Quickshell.frameTime` does not exist in
+   Quickshell 0.2.1, hence the FrameAnimation approach.
+
+- 2026-09-20 (later): Experimental's Debug group gained frame-pacing
+   switches ("V-Sync", "Cap at 60 FPS", persisted as `vsync`/`fpsCap` in the
+   same `backend/config/debug.json` as the FPS overlay; defaults vsync=true,
+   fpsCap=false). Qt reads the pacing variables before the scene graph
+   initializes, so `backend/scripts/solstice` translates the JSON into the
+   environment on every `start`/`restart` and `ExperimentalPage` restarts the
+   shell on toggle: `fpsCap` -> `QSG_FIXED_ANIMATION_STEP=1` (fixed-step
+   driver, 60 FPS cap, overrides V-Sync); `!vsync` ->
+   `QSG_USE_SIMPLE_ANIMATION_DRIVER=1` (elapsed-time animation driver,
+   free-running). The default driver stays at ~60 because Qt picks its vsync
+   interval from `QGuiApplication::primaryScreen()->refreshRate()`, which
+   QWaylandScreen reports as 60 (Wayland exposes no refresh rate) — the
+   free-running driver measured ~135-210 FPS on the test machine, so turning
+   V-Sync off with the cap off is what unlocks >60. A value pinned in
+   `backend/config/gpu.conf` or the calling environment still wins (the
+   launcher only fills in unset variables); `startup.log` records the
+   effective pair and the page's "Active pacing" info row reads the running
+   process back via `Quickshell.env`.
+
+- 2026-09-20 (later): The Debug "Cap at 60 FPS" toggle became a "Frame cap"
+   dropdown (Display / 60 FPS; `debug.json` `fpsCap` is now the string
+   `"display"`/`"60"`, legacy bools still map true->"60", false->"display").
+   Reason: Qt offers no API or environment variable for arbitrary caps. The
+   only hard rate is 60 (`QSG_FIXED_ANIMATION_STEP=1`); the elapsed-time
+   driver's render loop is throttled by the compositor's frame callbacks, so
+   "Display" lands exactly at the output refresh. Verified on the 144 Hz
+   panel by counting `QQuickWindow::frameSwapped` in the overlay window (via
+   the `Window.window` attached property; Quickshell 0.2.1 exposes no
+   `_backingWindow`): default driver ~58 presented / 62 animation ticks,
+   fixed step ~55/62, elapsed-time driver 143.9/144.1 — earlier "~200 FPS"
+   readings were an artifact of a second overlay window on the 60 Hz output
+   sharing the measurement file. The page now also labels the running mode
+   "Display rate" instead of "Free-running".
+
+- 2026-09-20 (later): Frame cap fix — the setting was sticky: the settings
+   window restarted the shell with the *current* process environment, so
+   `backend/scripts/solstice`'s "only fill unset variables" guard kept
+   replaying the old `QSG_*` pacing variables on every restart.
+   `ExperimentalPage.restartShell()` now strips
+   `QSG_USE_SIMPLE_ANIMATION_DRIVER`, `QSG_FIXED_ANIMATION_STEP` and
+   `QSG_NO_VSYNC` via `env -u` before exec'ing the launcher, which
+   re-derives pacing from debug.json/gpu.conf each start. The cap is also
+   authoritative now: "60 FPS" always selects the fixed-step driver (hard
+   60), "Display" always selects the elapsed-time driver (independent of
+   the V-Sync toggle), and V-Sync toggles `QSG_NO_VSYNC`: on (default) =
+   synced to the output (measured 144.0 presented on the 144 Hz display,
+   60.5 with the Qt default driver, 60.7 fixed), off = uncapped (~168-188
+   swaps, more than the panel shows). `QSG_NO_VSYNC` is deliberately not
+   applied when the cap is 60 so the cap always holds.
+
+- 2026-09-20 (later): Frame cap consolidation — the V-Sync toggle is gone;
+   the cap is the single pacing control (`debug.json` `fpsCap` = `"60"` or
+   `"display"`): "60 FPS" uses `QSG_FIXED_ANIMATION_STEP=1` (hard 60), and
+   "Display" uses the elapsed-time driver, which is throttled by the
+   compositor's frame callbacks, i.e. the output's highest refresh rate —
+   measured 144.0 on the 144 Hz output, 60.5 with the Qt default driver and
+   60.7/60.5 for fixed step (with and without `QSG_NO_VSYNC`). The old
+   V-Sync-off state made "Display" uncapped, which read as the cap not
+   working; on Wayland presentation is always compositor-synced, so the
+   synced driver *is* the display cap. A benchmark "Uncapped" option was
+   tried and dropped: `QSG_NO_VSYNC=1` measured 143.7-146.0 over repeated
+   runs, so the compositor throttles it to the same rate anyway. `vsync` is
+   no longer written to debug.json (legacy files are ignored rather than
+   migrated); the page's "Active pacing" row still reports "Uncapped" if
+   `QSG_NO_VSYNC` is pinned in gpu.conf, and a stale `QSG_NO_VSYNC` is
+   stripped on the settings restart.
 
 ## Verification
 ```

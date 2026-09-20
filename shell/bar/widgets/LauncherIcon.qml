@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../../themes"
+import "../../../style/themes"
 
 // OS launcher icon — the bar module that opens the app launcher.
 //
@@ -12,8 +12,9 @@ import "../../themes"
 // Debian, …) with a Tux fallback. Glyphs come from the Nerd Font linux set
 // (nf-linux-*) of Theme.iconFontFamily. Left-click is routed through
 // BarModule/BarSlot like every other module (this item owns no MouseArea);
-// the shared background card follows the workspaces card
-// (Theme.barBackgroundEnabled maps "launcher" onto "workspaces").
+// the shared background card follows the workspaces card while "Launcher
+// button sync" is on (Theme.barBackgroundEnabled maps "launcher" onto
+// "workspaces"; the sync toggle sits in the Workspaces settings).
 Item {
     id: root
     property bool vertical: false

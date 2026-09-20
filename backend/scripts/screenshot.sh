@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # screenshot.sh — capture backend for the screenshot UI
-# (overlays/ScreenshotUI.qml, PRINT keybind).
+# (shell/overlays/ScreenshotUI.qml, PRINT keybind).
 #
 # Usage: screenshot.sh <region|window|fullscreen> [geometry]
 #   region      interactive selection via slurp (geometry ignored)
@@ -8,7 +8,7 @@
 #               to the full desktop when empty
 #   fullscreen  all outputs
 #
-# Options (environment, set by the UI from config/screenshot.json):
+# Options (environment, set by the UI from backend/config/screenshot.json):
 #   SOLSTICE_SHOT_DIR       save folder override (~ is expanded; empty = default)
 #   SOLSTICE_SHOT_CURSOR    1 = include the cursor (grim -c)
 #   SOLSTICE_SHOT_CLIPBOARD 0 = don't copy to the clipboard

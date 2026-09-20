@@ -6,8 +6,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import "./widgets" as Bar
 
-import "../services"
-import "../themes"
+import "../../backend/services"
+import "../../style/themes"
 
 Scope {
     id: topBarScope

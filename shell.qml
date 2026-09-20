@@ -2,28 +2,43 @@
 //@ pragma IconTheme Papirus
 
 import Quickshell
-import "./themes"
-import "./services"
+import "./style/themes"
+import "./backend/services"
 import QtQuick
 import Quickshell.Io
 import Quickshell.Services.Notifications
-import "./bar" as Bar
-import "./overlays" as Overlays
-import "./panels" as Panels
-import "./panels/controlcenter" as Cc
-import "./panels/settings" as Settings
-import "./ui" as Ui
+import "./shell/bar" as Bar
+import "./shell/overlays" as Overlays
+import "./shell/panels" as Panels
+import "./shell/panels/controlcenter" as Cc
+import "./shell/panels/settings" as Settings
+import "./style/ui" as Ui
 
 ShellRoot {
     id: root
 
     // LOGGING: persist every runtime error/warning to logs/errors.log
-    // while the shell is running (services/LogService.qml).
+    // while the shell is running (backend/services/LogService.qml).
     QtObject { Component.onCompleted: LogService.start() }
     // PERF: instantiate the wallpaper backend at startup so its background
     // scan + thumbnail cache are warm before the first settings/carousel
     // open (singletons are lazy; without this the first open pays the scan).
     QtObject { Component.onCompleted: WallpaperService.refresh() }
+    // SINGLE INSTANCE: a second shell for this config would fight the first
+    // over the notification server and polkit agent DBus names. The guard
+    // (backend/services/InstanceGuard.qml) checks whether an older live
+    // instance exists and this one exits before registering any service.
+    // The notification server below and the polkit agent are gated on
+    // InstanceGuard.isPrimary for the same reason.
+    Connections {
+        target: InstanceGuard
+        function onCheckedChanged() {
+            if (InstanceGuard.checked && !InstanceGuard.isPrimary) {
+                console.info("[solstice] another instance of this configuration is already running; exiting")
+                Qt.quit()
+            }
+        }
+    }
     Connections {
         target: Quickshell
         function onReloadFailed(errorString) { LogService.record("error", errorString, "reload") }
@@ -38,49 +53,61 @@ ShellRoot {
         onTriggered: {
             if (wallpaperGuardProc.running) return
             let cmd = "pgrep -x swaybg >/dev/null 2>&1 && exit 0;"
-            cmd += " WALL=\"$(cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
+            cmd += " WALL=\"$(cat ~/.config/quickshell/solstice/backend/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/swaybg/current 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/awww/current 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " if [ ! -f \"$WALL\" ]; then for d in \"$HOME/Bilder/wallpapers\" \"$HOME/Pictures/wallpapers\" \"$HOME/Wallpapers\" \"${XDG_PICTURES_DIR:-$HOME/Pictures}/wallpapers\" \"$HOME/wallpapers\"; do if [ -d \"$d\" ]; then WALL=\"$(find \"$d\" -mindepth 1 -maxdepth 2 -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' -o -iname '*.bmp' -o -iname '*.gif' -o -iname '*.tiff' \\) 2>/dev/null | sort | head -1)\"; [ -f \"$WALL\" ] && break; fi; done; fi;"
             cmd += " [ -f \"$WALL\" ] || exit 0;"
-            cmd += " MODE=$(jq -r '.mode // \"fill\"' \"$HOME/.config/quickshell/solstice/config/wallpaper_settings.json\" 2>/dev/null); case \"$MODE\" in stretch|fit|fill|center|tile) ;; *) MODE=fill;; esac;"
+            cmd += " MODE=$(jq -r '.mode // \"fill\"' \"$HOME/.config/quickshell/solstice/backend/config/wallpaper_settings.json\" 2>/dev/null); case \"$MODE\" in stretch|fit|fill|center|tile) ;; *) MODE=fill;; esac;"
             cmd += " setsid nohup swaybg -i \"$WALL\" -m \"$MODE\" >/dev/null 2>&1 < /dev/null & disown; echo restored"
             wallpaperGuardProc.command = ["bash", "-c", cmd]
             wallpaperGuardProc.running = true
         }
     }
 
-    property alias notifServer: notifServer
-    NotificationServer {
-        id: notifServer
-        keepOnReload: true
-        persistenceSupported: false
-        bodySupported: true
-        bodyMarkupSupported: true
-        bodyHyperlinksSupported: true
-        bodyImagesSupported: true
-        imageSupported: true
-        actionsSupported: true
-        actionIconsSupported: true
-        inlineReplySupported: true
-        onNotification: notification => {
-            // CRASH FIX: snapshot only plain types. Never store
-            // notification.actions (QObjects) — dangling actions crash
-            // CalendarPanel Repeaters in QV4::fromData on open.
-            // HistoryService.add() sanitizes again as defense-in-depth.
-            try {
-                HistoryService.add({
-                    id: Number(notification.id),
-                    appName: String(notification.appName || "Notification"),
-                    summary: String(notification.summary || ""),
-                    body: String(notification.body || ""),
-                    urgency: Number(notification.urgency),
-                    time: Date.now()
-                })
-            } catch (e) { }
-            if (Theme.dndEnabled) return
-            notification.tracked = true
-            expireOldTrackedNotifications()
+    // Notification server: only created once the instance guard confirmed
+    // this is the primary shell. On a duplicate the Loader never activates
+    // and the shell exits, so no registration is ever attempted (and no
+    // "one is already registered" warning is logged).
+    property var notifServer: notifLoader.item
+    Loader {
+        id: notifLoader
+        active: InstanceGuard.isPrimary
+        sourceComponent: notifComp
+    }
+    Component {
+        id: notifComp
+        NotificationServer {
+            keepOnReload: true
+            persistenceSupported: false
+            bodySupported: true
+            bodyMarkupSupported: true
+            bodyHyperlinksSupported: true
+            bodyImagesSupported: true
+            imageSupported: true
+            actionsSupported: true
+            actionIconsSupported: true
+            inlineReplySupported: true
+            onNotification: notification => {
+                // CRASH FIX: snapshot only plain types. Never store
+                // notification.actions (QObjects) — dangling actions crash
+                // CalendarPanel Repeaters in QV4::fromData on open.
+                // HistoryService.add() sanitizes again as defense-in-depth.
+                try {
+                    HistoryService.add({
+                        id: Number(notification.id),
+                        appName: String(notification.appName || "Notification"),
+                        appIcon: String(notification.appIcon || notification.image || ""),
+                        summary: String(notification.summary || ""),
+                        body: String(notification.body || ""),
+                        urgency: Number(notification.urgency),
+                        time: Date.now()
+                    })
+                } catch (e) { }
+                if (Theme.dndEnabled) return
+                notification.tracked = true
+                root.expireOldTrackedNotifications()
+            }
         }
     }
 
@@ -124,7 +151,7 @@ ShellRoot {
     // bar panels open, switch and close around it.
     property bool settingsVisible: false
     property string settingsSection: "wallpaper"
-    // Screenshot tool (overlays/ScreenshotUI.qml): its own flag like
+    // Screenshot tool (shell/overlays/ScreenshotUI.qml): its own flag like
     // settings — a transient overlay, not part of the exclusive panel state.
     property bool screenshotVisible: false
     // Anchor mode of the open launcher: false = bar icon (under the icon at
@@ -141,7 +168,7 @@ ShellRoot {
     readonly property bool powerVisible: activePanel === panel.power
     // Drill-ins that open OVER the control center (Android-QS style): the CC
     // window stays mapped as the dimmed backdrop under the sub-panel, and the
-    // sub-panel morphs out of the clicked tile/button (see ui/PanelMorph
+    // sub-panel morphs out of the clicked tile/button (see style/ui/PanelMorph
     // overlay runs and CaelestiaPopout._tryMorphBack).
     readonly property bool drillInVisible: audioVisible || bluetoothMenuVisible || updatesMenuVisible
     readonly property bool ccUnderlay: drillInVisible
@@ -234,7 +261,7 @@ ShellRoot {
         if (p !== undefined) openPanel(p)
     }
 
-    // Bar panels that take part in the cross-panel morph (ui/PanelMorph).
+    // Bar panels that take part in the cross-panel morph (style/ui/PanelMorph).
     // The ids match each panel popout's `morphId` (= BarAnchor moduleId).
     // Settings is not bar-anchored and keeps its own run.
     readonly property var panelMorphId: ({
@@ -377,8 +404,10 @@ ShellRoot {
     function openSettings(section: string): void {
         let s = (section || "wallpaper").trim() || "wallpaper"
         // Legacy ids: bar/modules and notif all point at the Panels page now
-        // (notifications + OSDs are a Panels sub-page).
+        // (notifications + OSDs are a Panels sub-page); theming now lives in
+        // the Apps page's library.
         if (s === "bar" || s === "modules" || s === "notif") s = "panels"
+        else if (s === "theming") s = "apps"
         let valid = ["wallpaper", "global", "umbriel", "audio", "apps", "panels", "network", "bluetooth", "about", "setup"]
         if (valid.indexOf(s) === -1) s = "wallpaper"
         settingsSection = s
@@ -519,6 +548,13 @@ ShellRoot {
             showLauncher: root.launcherVisible
             centered: root.launcherCentered
             onDismissed: root.closePanels()
+            // Built-in launcher Settings entries (no .desktop): close the
+            // launcher, then open the settings window on the requested
+            // section (empty = the last shown one).
+            onSettingsRequested: section => {
+                root.closePanels()
+                root.openSettings(section.length > 0 ? section : (root.settingsSection || "wallpaper"))
+            }
         }
     }
 
@@ -535,7 +571,10 @@ ShellRoot {
             popped: root.ccViewState() !== 0
             behind: root.ccViewState() === 2
             onDismissed: root.closePanels()
-            onSettingsRequested: root.openSettings("wallpaper")
+            onSettingsRequested: {
+                root.closePanels()
+                root.openSettings("wallpaper")
+            }
             onAudioRequested: root.openPanel(panel.audio)
             onBluetoothRequested: root.openPanel(panel.bluetoothMenu)
             onUpdatesRequested: root.openPanel(panel.updatesMenu)
@@ -634,6 +673,9 @@ ShellRoot {
     // Scope + timers, not a scene tree. Real RAM wins are the 14 panel
     // Loaders above, which ARE correctly gated.
     Overlays.VolumeOSD { }
+    // FPS debug overlay (Setup > Experimental). Resident Scope, but its
+    // window and frame ticker only run while Theme.debugFpsEnabled is on.
+    Overlays.DebugOverlay { }
     Overlays.ScreenshotUI {
         showScreenshot: root.screenshotVisible
         onDismissed: root.hideScreenshot()

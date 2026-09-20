@@ -7,7 +7,7 @@ import Quickshell.Io
 //
 // Qt/QML runtime errors and warnings only live on Quickshell's internal
 // log (ephemeral, under $XDG_RUNTIME_DIR). This service follows that log
-// with scripts/log-errors.sh and appends every ERROR / WARN / CRITICAL /
+// with backend/scripts/log-errors.sh and appends every ERROR / WARN / CRITICAL /
 // FATAL line, timestamped, to <shellDir>/logs/errors.log.
 //
 // A unique marker is emitted into the shell log on every start; the
@@ -44,7 +44,7 @@ Singleton {
 
     Process {
         id: stopProc
-        command: ["bash", Quickshell.shellDir + "/scripts/log-errors.sh", "--stop", root.logDir]
+        command: ["bash", Quickshell.shellDir + "/backend/scripts/log-errors.sh", "--stop", root.logDir]
         onExited: root.emitMarkerAndTail()
     }
 
@@ -52,7 +52,7 @@ Singleton {
         if (!_started || !enabled) return
         tailProc.command = [
             "bash",
-            Quickshell.shellDir + "/scripts/log-errors.sh",
+            Quickshell.shellDir + "/backend/scripts/log-errors.sh",
             String(Quickshell.processId),
             _marker,
             errorLogPath

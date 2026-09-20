@@ -2,13 +2,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../../../themes"
+import "../../../../style/themes"
 import ".."
 
 // Date & Time — system clock via systemd-timedated (timedatectl), reachable
 // from Setup. Reads timezone/NTP state and applies changes directly as the
 // user; the required polkit prompt is shown by the shell's resident agent
-// (overlays/Polkit.qml). Where supported, only the date or the time field
+// (shell/overlays/Polkit.qml). Where supported, only the date or the time field
 // needs editing — Apply sends both.
 NexusControls.PageBase {
     id: root

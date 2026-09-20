@@ -6,9 +6,9 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import "../themes"
-import "../services"
-import "../ui"
+import "../../style/themes"
+import "../../backend/services"
+import "../../style/ui"
 
 // Android-style power menu: a standalone full-screen modal (NOT a control
 // center drill-in). The backdrop is dimmed by a scrim and blurred by the
@@ -24,7 +24,7 @@ Scope {
     // hand it to the lockscreen when Lock starts the merge morph.
     property var cardRect: null
     signal dismissed()
-    // Lock lives in overlays/Lockscreen.qml; the host (shell.qml) raises
+    // Lock lives in shell/overlays/Lockscreen.qml; the host (shell.qml) raises
     // the overlay after closing the menu run.
     signal lockRequested()
 

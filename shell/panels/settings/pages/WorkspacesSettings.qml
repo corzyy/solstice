@@ -1,6 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
+import "../../../../style/themes"
 import ".."
 
 // Caelestia bar.workspaces settings (nexus/pages/panels/taskbar/
@@ -44,6 +44,13 @@ Column {
         subtext: "Highlight workspaces that contain windows"
         checked: Theme.workspaceOccupiedBg
         onToggled: n => Theme.setWorkspaceOccupiedBg(n)
+    }
+    NexusControls.ToggleRow {
+        visible: Theme.barBackgroundEnabled("workspaces")
+        text: "Launcher button sync"
+        subtext: "Use the background for the launcher button as well"
+        checked: Theme.workspaceLauncherSync
+        onToggled: n => Theme.setWorkspaceLauncherSync(n)
     }
     NexusControls.ToggleRow {
         text: "Show unoccupied"

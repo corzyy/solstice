@@ -41,7 +41,7 @@ Item {
     // Island morph driver: 0 = compact pill tucked at the bar, 1 = full
     // panel. Full-travel mode animates it (DefaultSpatial out, FastEffects
     // back); minimal/slideFade modes hold 1 (fade/nudge only, no size
-    // morph). Call sites bind island geometry (ui/IslandMorph) to this so
+    // morph). Call sites bind island geometry (style/ui/IslandMorph) to this so
     // shape and position can never desync from the open run.
     property real grow: 1
     // True once the enter run has fully completed. Gates position/size

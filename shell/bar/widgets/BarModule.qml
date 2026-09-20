@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Services.SystemTray as TrayService
-import "../../themes"
-import "../../services"
+import "../../../style/themes"
+import "../../../backend/services"
 
 Item {
     id: root

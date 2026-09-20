@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
-import "../../../themes"
+import "../../../../style/themes"
 import ".."
 
 NexusControls.PageBase {
@@ -138,13 +138,13 @@ NexusControls.PageBase {
         function setStart(v) {
             if (v !== "sunday" && v !== "monday") return
             currentName = v
-            calProc.command = ["bash", "-c", "f=~/.config/quickshell/solstice/config/calendar.json; mkdir -p \"$(dirname \"$f\")\"; [ -f \"$f\" ] || echo '{ }' > \"$f\"; jq '.weekStartDay = \"" + v + "\"' \"$f\" > /tmp/solstice-cal.json && mv /tmp/solstice-cal.json \"$f\""]
+            calProc.command = ["bash", "-c", "f=~/.config/quickshell/solstice/backend/config/calendar.json; mkdir -p \"$(dirname \"$f\")\"; [ -f \"$f\" ] || echo '{ }' > \"$f\"; jq '.weekStartDay = \"" + v + "\"' \"$f\" > /tmp/solstice-cal.json && mv /tmp/solstice-cal.json \"$f\""]
             if (!calProc.running) calProc.running = true
         }
     }
     Process {
         id: calFetchProc
-        command: ["bash", "-c", "jq -r '.weekStartDay // \"sunday\"' ~/.config/quickshell/solstice/config/calendar.json 2>/dev/null | tr -d '\\n'"]
+        command: ["bash", "-c", "jq -r '.weekStartDay // \"sunday\"' ~/.config/quickshell/solstice/backend/config/calendar.json 2>/dev/null | tr -d '\\n'"]
         stdout: StdioCollector {
             onStreamFinished: {
                 let o = ((text || "").trim().toLowerCase())

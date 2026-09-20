@@ -40,7 +40,7 @@ Singleton {
 
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/update_center.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/update_center.json"
         watchChanges: true; blockLoading: true; printErrors: false
         onFileChanged: settingsReloadDebounce.restart()
         adapter: JsonAdapter {
@@ -166,7 +166,7 @@ Singleton {
 
     Process {
         id: updProc
-        command: ["bash", Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/check-updates.sh"]
+        command: ["bash", Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/scripts/check-updates.sh"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: root.parseUpdates(text)

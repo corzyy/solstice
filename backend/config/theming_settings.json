@@ -12,6 +12,7 @@
     "templateGhostty": false,
     "templateGtk3": true,
     "templateGtk4": true,
+    "templateHelium": true,
     "templateKitty": true,
     "templateNeovim": false,
     "templateObs": true,

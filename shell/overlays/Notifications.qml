@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Widgets
-import "../themes"
+import "../../style/themes"
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
 
@@ -41,6 +42,127 @@ Scope {
     readonly property int cardWidth: 380
     readonly property int edgeGap: 12
 
+    // Close-button cookie ring: outline samples of MaterialShapes
+    // Cookie9Sided (sampled from the M3Shapes plugin at implicitSize 100,
+    // normalized to the unit square). One 40° period is enough — the shape
+    // is 9-fold rotationally symmetric; the full 72-point outline is
+    // rebuilt by rotating the period at runtime.
+    readonly property int closeCookieSize: 28
+    readonly property var cookiePeriod: [
+        [0.50000, 0.01415],
+        [0.54193, 0.02069],
+        [0.58143, 0.03817],
+        [0.61669, 0.06450],
+        [0.65159, 0.08352],
+        [0.69046, 0.09157],
+        [0.73437, 0.09406],
+        [0.77540, 0.10669],
+        [0.81237, 0.12773]
+    ]
+    function cookieRingPoints(scale: real, size: real): var {
+        const pts = []
+        const cx = size / 2
+        const cy = size / 2
+        const n = cookiePeriod.length - 1
+        for (let i = 0; i < n * 9; i++) {
+            const base = cookiePeriod[i % n]
+            const th = Math.floor(i / n) * 40 * Math.PI / 180
+            const dx = (base[0] - 0.5) * size
+            const dy = (base[1] - 0.5) * size
+            pts.push(Qt.point(cx + (dx * Math.cos(th) - dy * Math.sin(th)) * scale,
+                              cy + (dx * Math.sin(th) + dy * Math.cos(th)) * scale))
+        }
+        return pts
+    }
+    readonly property var cookieOuter: cookieRingPoints(1.0, closeCookieSize)
+    readonly property var cookieInner: cookieRingPoints(0.82, closeCookieSize)
+
+    // Toast close button: the ✕ sits in a Material 3 Cookie9Sided ring whose
+    // accent arc is the toast's remaining display time — it drains clockwise
+    // from 12 o'clock as progressAnim advances and freezes while the toast is
+    // hovered or dragged (progressAnim pauses), so it always shows the time
+    // the toast will actually stay on screen.
+    component CloseCookie: Item {
+        id: cookieBtn
+        property real remaining: 1
+        property bool critical: false
+        property bool showProgress: true
+        signal clicked
+
+        readonly property bool hovered: closeMa.containsMouse
+        readonly property color tint: critical ? Theme.on_error_container : Theme.textPrimary
+        readonly property color ringColor: critical ? Theme.on_error_container : Theme.accent
+        readonly property color trackColor: Theme.withAlpha(critical ? Theme.on_error_container : Theme.textPrimary,
+                                                              critical ? (hovered ? 0.45 : 0.28) : (hovered ? 0.34 : 0.18))
+
+        implicitWidth: notifScope.closeCookieSize
+        implicitHeight: notifScope.closeCookieSize
+
+        Shape {
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
+            antialiasing: Theme.shapesAa
+
+            // Hover state layer (M3): subtle cookie-shaped wash.
+            ShapePath {
+                strokeWidth: 0
+                fillColor: Theme.withAlpha(cookieBtn.tint, cookieBtn.hovered ? 0.12 : 0)
+                Behavior on fillColor {
+                    enabled: Theme.animationsEnabled
+                    ColorAnimation { duration: Theme.durFastEffects }
+                }
+                PathPolyline { path: notifScope.cookieOuter }
+            }
+
+            // Track: full cookie ring, always visible.
+            ShapePath {
+                strokeWidth: 0
+                fillColor: cookieBtn.trackColor
+                fillRule: ShapePath.OddEvenFill
+                PathPolyline { path: notifScope.cookieOuter }
+                PathPolyline { path: notifScope.cookieInner }
+            }
+
+            // Remaining time: accent arc anchored at 12 o'clock, consumed
+            // clockwise (angle 90 puts the conical gradient's origin at the
+            // top; the arc then extends counter-clockwise for `remaining`).
+            ShapePath {
+                strokeWidth: 0
+                fillRule: ShapePath.OddEvenFill
+                fillGradient: ConicalGradient {
+                    centerX: cookieBtn.width / 2
+                    centerY: cookieBtn.height / 2
+                    angle: 90
+                    GradientStop { position: 0; color: cookieBtn.showProgress ? cookieBtn.ringColor : Theme.withAlpha(cookieBtn.ringColor, 0) }
+                    GradientStop { position: cookieBtn.remaining; color: cookieBtn.showProgress ? cookieBtn.ringColor : Theme.withAlpha(cookieBtn.ringColor, 0) }
+                    GradientStop { position: cookieBtn.remaining; color: Theme.withAlpha(cookieBtn.ringColor, 0) }
+                    GradientStop { position: 1; color: Theme.withAlpha(cookieBtn.ringColor, 0) }
+                }
+                PathPolyline { path: notifScope.cookieOuter }
+                PathPolyline { path: notifScope.cookieInner }
+            }
+        }
+
+        Text {
+            antialiasing: Theme.textAa
+            renderType: Theme.textRenderType
+            anchors.centerIn: parent
+            text: "✖"
+            color: cookieBtn.hovered ? cookieBtn.tint : (cookieBtn.critical ? Theme.on_error_container : Theme.textSecondary)
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.fs(13)
+            font.weight: Font.Bold
+        }
+
+        MouseArea {
+            id: closeMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: cookieBtn.clicked()
+        }
+    }
+
     // Merged from notifications/NotificationCard.qml — toast delegate.
     component NotifCard: Item {
     id: delegateRoot
@@ -61,6 +183,8 @@ Scope {
     property string cachedAppName: "Notification"
     property string cachedAppIcon: ""
     property string cachedImage: ""
+    property real cachedTimeMs: 0
+    property string cachedTimeLabel: "now"
     property var cachedActions: []
     property bool cachedHasInlineReply: false
     property string cachedInlinePlaceholder: ""
@@ -89,6 +213,8 @@ Scope {
             cachedAppName = n && n.appName ? n.appName : "Notification"
             cachedAppIcon = n && n.appIcon ? n.appIcon : ""
             cachedImage = n && n.image ? n.image : ""
+            cachedTimeMs = Date.now()
+            cachedTimeLabel = "now"
             cachedActions = n && n.actions ? n.actions : []
             cachedHasInlineReply = n ? n.hasInlineReply : false
             cachedInlinePlaceholder = n ? n.inlineReplyPlaceholder : ""
@@ -172,6 +298,30 @@ Scope {
             if (expire) delegateRoot.n.expire()
             else delegateRoot.n.dismiss()
         } catch(e) { }
+    }
+
+    function relativeTime(ms: real): string {
+        try {
+            let diff = Date.now() - ms
+            if (diff < 0) diff = 0
+            let m = Math.floor(diff / 60000)
+            if (m < 1) return "now"
+            if (m < 60) return m + "m ago"
+            let h = Math.floor(m / 60)
+            if (h < 24) return h + "h ago"
+            let days = Math.floor(h / 24)
+            if (days === 1) return "Yesterday"
+            if (days < 7) return days + "d ago"
+            return new Date(ms).toLocaleDateString()
+        } catch (e) { return "now" }
+    }
+    // Resident/critical toasts can outlive a minute: keep the header
+    // timestamp honest while the card is on screen.
+    Timer {
+        interval: 30000
+        repeat: true
+        running: delegateRoot.visible
+        onTriggered: delegateRoot.cachedTimeLabel = delegateRoot.relativeTime(delegateRoot.cachedTimeMs)
     }
 
     Item {
@@ -267,12 +417,17 @@ Scope {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 12
-                Item {
+                // Circular app avatar: icon clipped into a tonal circle,
+                // first letter as fallback. Top-aligned with the app line.
+                Rectangle {
                     id: iconSlot
                     Layout.preferredWidth: 40
                     Layout.preferredHeight: 40
-                    Layout.alignment: Qt.AlignVCenter
-                    visible: slotSource !== "" || iconFailed
+                    Layout.alignment: Qt.AlignTop
+                    radius: width / 2
+                    antialiasing: Theme.shapesAa
+                    clip: true
+                    color: card.isCritical ? Theme.withAlpha(Theme.on_error_container, 0.16) : Theme.surface_container_highest
                     readonly property string slotSource: {
                         if (delegateRoot.cachedImage !== "") return delegateRoot.cachedImage
                         let ic = delegateRoot.cachedAppIcon
@@ -301,9 +456,9 @@ Scope {
                         antialiasing: Theme.textAa
                         renderType: Theme.textRenderType
                         anchors.centerIn: parent
-                        visible: iconSlot.iconFailed
+                        visible: iconSlot.iconFailed || iconSlot.slotSource === ""
                         text: (delegateRoot.cachedAppName || "?").charAt(0).toUpperCase()
-                        color: card.isCritical ? Theme.on_error_container : Theme.textPrimary
+                        color: card.isCritical ? Theme.on_error_container : Theme.textSecondary
                         font.family: Theme.iconFontFamily
                         font.pixelSize: Theme.fs(16)
                         font.weight: Font.Medium
@@ -311,9 +466,47 @@ Scope {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.rightMargin: 10
+                    Layout.alignment: Qt.AlignTop
+                    // Reserve the top-right corner for the close cookie.
+                    Layout.rightMargin: 24
                     spacing: 2
+                    // Header line: app name · relative time (screenshot).
+                    Row {
+                        Layout.fillWidth: true
+                        spacing: 5
+                        Text {
+                            antialiasing: Theme.textAa
+                            renderType: Theme.textRenderType
+                            width: Math.min(implicitWidth, Math.max(0, parent.width - appDot.implicitWidth - appTime.implicitWidth - 10))
+                            text: delegateRoot.cachedAppName
+                            color: card.isCritical ? Theme.on_error_container : Theme.textPrimary
+                            font.family: Theme.iconFontFamily
+                            font.pixelSize: Theme.fs(12)
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
+                            textFormat: Text.PlainText
+                        }
+                        Text {
+                            id: appDot
+                            antialiasing: Theme.textAa
+                            renderType: Theme.textRenderType
+                            text: "·"
+                            color: card.isCritical ? Theme.withAlpha(Theme.on_error_container, 0.7) : Theme.textMuted
+                            font.family: Theme.iconFontFamily
+                            font.pixelSize: Theme.fs(12)
+                        }
+                        Text {
+                            id: appTime
+                            antialiasing: Theme.textAa
+                            renderType: Theme.textRenderType
+                            text: delegateRoot.cachedTimeLabel
+                            color: card.isCritical ? Theme.withAlpha(Theme.on_error_container, 0.7) : Theme.textMuted
+                            font.family: Theme.iconFontFamily
+                            font.pixelSize: Theme.fs(11)
+                            font.weight: Font.Medium
+                        }
+                    }
                     Text {
                         antialiasing: Theme.textAa
                         renderType: Theme.textRenderType
@@ -337,7 +530,7 @@ Scope {
                         text: delegateRoot.cachedBody
                         color: card.isCritical ? Theme.withAlpha(Theme.on_error_container, 0.85) : Theme.textSecondary
                         font.family: Theme.iconFontFamily
-                        font.pixelSize: Theme.fs(14)
+                        font.pixelSize: Theme.fs(13)
                         wrapMode: Text.WordWrap
                         maximumLineCount: 3
                         elide: Text.ElideRight
@@ -474,32 +667,17 @@ Scope {
             }
         }
 
-        Item {
+        CloseCookie {
             anchors.top: parent.top
             anchors.right: parent.right
-            anchors.topMargin: 3
-            anchors.rightMargin: 3
-            width: 18
-            height: 18
-            visible: opacity > 0
-            opacity: card.isHovered ? 1 : 0
-            Text {
-                antialiasing: Theme.textAa
-                renderType: Theme.textRenderType
-                anchors.centerIn: parent
-                text: "✕"
-                color: hoverCloseMa.containsMouse ? (card.isCritical ? Theme.on_error_container : Theme.textPrimary) : Theme.textMuted
-                font.pixelSize: Theme.fs(10)
-            }
-            MouseArea {
-                id: hoverCloseMa
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (delegateRoot.isDismissing) return
-                    delegateRoot.requestDismiss(false, delegateRoot.slideDir)
-                }
+            anchors.topMargin: 5
+            anchors.rightMargin: 5
+            critical: card.isCritical
+            showProgress: delegateRoot.timeoutMs > 0
+            remaining: delegateRoot.timeoutMs > 0 ? Math.max(0, Math.min(1, 1 - delegateRoot.progress)) : 1
+            onClicked: {
+                if (delegateRoot.isDismissing) return
+                delegateRoot.requestDismiss(false, delegateRoot.slideDir)
             }
         }
 

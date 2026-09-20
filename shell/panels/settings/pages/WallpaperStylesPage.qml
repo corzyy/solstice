@@ -2,9 +2,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
 import Quickshell.Widgets
-import "../../../themes"
-import "../../../services"
-import "../../../ui" as Ui
+import "../../../../style/themes"
+import "../../../../backend/services"
+import "../../../../style/ui" as Ui
 import ".."
 
 // Wallpaper & style — Nexus port of the Caelestia page: recent-wallpaper
@@ -189,7 +189,7 @@ NexusControls.PageBase {
         visible: root.view === ""
         width: parent.width
         height: previewCard.height + 44
-        ClippingRectangle {
+        Ui.ClipRect {
             id: previewCard
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
@@ -294,7 +294,7 @@ NexusControls.PageBase {
                         width: root.recentTileWidth
                         height: width
                         readonly property bool isCurrent: ("" + recentTile.modelData) === WallpaperService.current
-                        ClippingRectangle {
+                        Ui.ClipRect {
                             anchors.fill: parent
                             radius: 16
                             color: Theme.panelCard
@@ -372,9 +372,11 @@ NexusControls.PageBase {
             Rectangle {
                 width: 40
                 height: 40
-                radius: 20
+                // M3E shape morph: circle at rest, rounded square while hovered.
+                radius: backMouse.containsMouse ? 12 : 20
                 color: backMouse.containsMouse ? Theme.panelCardHighest : Theme.panelCardHigh
                 antialiasing: Theme.shapesAa
+                Behavior on radius { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
                 Text {
                     anchors.centerIn: parent
                     text: "‹"
@@ -383,7 +385,7 @@ NexusControls.PageBase {
                     antialiasing: Theme.textAa
                     renderType: Theme.textRenderType
                 }
-                Ui.StateLayer { id: backMouse; radius: 20; color: Theme.textPrimary; onClicked: root.back() }
+                Ui.StateLayer { id: backMouse; radius: parent.radius; color: Theme.textPrimary; onClicked: root.back() }
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -443,7 +445,7 @@ NexusControls.PageBase {
                         anchors.fill: parent
                         anchors.margins: 5
                         spacing: 5
-                        ClippingRectangle {
+                        Ui.ClipRect {
                             width: parent.width
                             height: parent.height - 16
                             radius: 12

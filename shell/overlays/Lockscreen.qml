@@ -5,9 +5,9 @@ import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
-import "../themes"
-import "../services"
-import "../ui"
+import "../../style/themes"
+import "../../backend/services"
+import "../../style/ui"
 
 // Lockscreen — fullscreen overlay per monitor. Background is the current
 // wallpaper blurred (GPU, MultiEffect) under a dim scrim; the clock and the
@@ -64,7 +64,7 @@ Scope {
     function submitPin(): void {
         if (pinInput.length === 0) return
         clearPinError()
-        authProc.command = [Quickshell.shellDir + "/scripts/lock-auth.sh", pinInput]
+        authProc.command = [Quickshell.shellDir + "/backend/scripts/lock-auth.sh", pinInput]
         if (!authProc.running) authProc.running = true
     }
 
@@ -88,7 +88,7 @@ Scope {
 
     Process {
         id: wallpaperResolveProc
-        command: ["bash", "-c", "for f in \"$(cat ~/.config/quickshell/solstice/config/current_wallpaper.txt 2>/dev/null)\" \"$(cat ~/.cache/swaybg/current 2>/dev/null)\" \"$(cat ~/.cache/awww/current 2>/dev/null)\"; do f=\"${f#file://}\"; if [ -n \"$f\" ] && [ -f \"$f\" ]; then printf '%s' \"$f\"; exit 0; fi; done"]
+        command: ["bash", "-c", "for f in \"$(cat ~/.config/quickshell/solstice/backend/config/current_wallpaper.txt 2>/dev/null)\" \"$(cat ~/.cache/swaybg/current 2>/dev/null)\" \"$(cat ~/.cache/awww/current 2>/dev/null)\"; do f=\"${f#file://}\"; if [ -n \"$f\" ] && [ -f \"$f\" ]; then printf '%s' \"$f\"; exit 0; fi; done"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: lockScope.wallpaperPath = String(text || "").trim()

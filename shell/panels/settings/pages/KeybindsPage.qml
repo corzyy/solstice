@@ -3,8 +3,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import "../../../themes"
-import "../../../ui" as Ui
+import "../../../../style/themes"
+import "../../../../style/ui" as Ui
 import ".."
 
 // Keybinds — one page for every shortcut, in three layers: the shell action
@@ -36,7 +36,12 @@ NexusControls.PageBase {
     property bool messageIsError: false
     property string message: ""
 
-    readonly property string scriptPath: Quickshell.shellDir + "/scripts/umbriel-keybinds.py"
+    readonly property string scriptPath: Quickshell.shellDir + "/backend/scripts/umbriel-keybinds.py"
+    readonly property string appsScriptPath: Quickshell.shellDir + "/backend/scripts/apps-manage.py"
+    // Resolved default terminal / browser / file manager (the same state the
+    // Apps page edits). Their spawn actions get their own catalog group so
+    // the rows read "Launch Terminal" instead of "spawn:kitty".
+    property var defaultApps: ({})
 
     readonly property var shellCatalog: [
         { id: "launcher", label: "Launcher", subtext: "Open the app launcher", action: "spawn:solstice module launcher toggle" },
@@ -48,6 +53,31 @@ NexusControls.PageBase {
         { id: "systemtray", label: "System tray", subtext: "Toggle the system tray panel", action: "spawn:solstice module systemtray toggle" },
         { id: "reload", label: "Reload shell", subtext: "Restart Quickshell and apply config changes", action: "spawn:solstice reload" }
     ]
+    // Default-application launchers (Apps > Default applications). Actions
+    // follow the stored defaults, so switching the app there relabels the row
+    // here. An unbound default still gets a row ("Not bound") so it can be
+    // (re)bound without opening the Apps page first.
+    readonly property var appCatalog: {
+        const kinds = [
+            { kind: "terminal", label: "Launch Terminal", subtext: "Default terminal" },
+            { kind: "browser", label: "Launch Web Browser", subtext: "Default web browser" },
+            { kind: "fileManager", label: "Launch File Manager", subtext: "Default file manager" }
+        ]
+        let out = []
+        for (let i = 0; i < kinds.length; i++) {
+            const d = root.defaultApps[kinds[i].kind]
+            if (!d || !d.action) continue
+            const app = String(d.name || d.command || "")
+            out.push({
+                group: "Applications",
+                id: "app:" + kinds[i].kind,
+                label: kinds[i].label,
+                subtext: app.length > 0 ? kinds[i].subtext + " · " + app : kinds[i].subtext,
+                action: d.action
+            })
+        }
+        return out
+    }
     // Curated useful Umbriel actions, grouped like the compositor cheatsheet.
     // Actions bound in keybinds-system.toml are edited there, user binds in
     // keybinds-user.toml, so every row round-trips to its own file.
@@ -94,12 +124,13 @@ NexusControls.PageBase {
     ]
     // Actions kept off the page (the config bind stays active).
     readonly property var hiddenActions: ["spawn:opencode"]
-    // Shell actions first, then the compositor groups, then every remaining
-    // effective bind in the compositor files so nothing in
-    // keybinds-system/user.toml is unreachable. Shell spawns are covered by
-    // the shell catalog and excluded from "Other binds".
+    // Shell actions first, then the default-application launchers and the
+    // compositor groups, then every remaining effective bind in the
+    // compositor files so nothing in keybinds-system/user.toml is unreachable.
+    // Shell spawns are covered by the shell catalog, app launchers by the
+    // app catalog, and both are excluded from "Other binds".
     readonly property var catalog: {
-        let base = root.shellCatalog.concat(root.compositorCatalog)
+        let base = root.shellCatalog.concat(root.appCatalog, root.compositorCatalog)
         const known = {}
         for (let i = 0; i < base.length; ++i) known[base[i].action] = true
         const binds = root.binds
@@ -207,6 +238,7 @@ NexusControls.PageBase {
     }
     function refresh(): void {
         if (!listProc.running) listProc.running = true
+        if (!defaultsProc.running) defaultsProc.running = true
     }
 
     // ---- capture ---------------------------------------------------------
@@ -446,6 +478,19 @@ NexusControls.PageBase {
                 }
             }
         }
+    }
+    Process {
+        id: defaultsProc
+        command: ["python3", root.appsScriptPath, "defaults", "--json"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                let parsed = null
+                try { parsed = JSON.parse(text || "{}") } catch (e) {}
+                if (parsed && parsed.ok) root.defaultApps = parsed.defaults || ({})
+            }
+        }
+        stderr: StdioCollector { waitForEnd: true }
     }
     Process {
         id: editProc

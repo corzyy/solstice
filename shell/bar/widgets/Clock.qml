@@ -1,7 +1,8 @@
 import QtQuick
 import Quickshell
-import "../../themes"
-import "../../services"
+import M3Shapes
+import "../../../style/themes"
+import "../../../backend/services"
 
 Item {
     id: root
@@ -55,6 +56,36 @@ Item {
     readonly property color _hoverColor: mouse.containsMouse ? Theme.primary : Theme.textPrimary
     readonly property color _dimColor: mouse.containsMouse ? Theme.primary : Theme.textMuted
 
+    // Circle is not in the pool: it is the resting shape, so a pick landing
+    // on it would read as no shape at all. Declared before iconBgVisible so
+    // the init-time onIconBgVisibleChanged pick already sees the list.
+    readonly property var shapeChoices: [
+        MaterialShape.Square, MaterialShape.Slanted, MaterialShape.Pill,
+        MaterialShape.Pentagon, MaterialShape.Gem, MaterialShape.Sunny,
+        MaterialShape.Cookie4Sided, MaterialShape.Cookie6Sided,
+        MaterialShape.Cookie7Sided, MaterialShape.Cookie9Sided,
+        MaterialShape.Cookie12Sided, MaterialShape.Clover4Leaf,
+        MaterialShape.Clover8Leaf
+    ]
+    // Optional M3 expressive shape behind the clock icon: same treatment as
+    // the active window's icon box (random pick from the expressive pool,
+    // accent fill, on-accent glyph).
+    readonly property bool iconBgVisible: Theme.clockIcon && Theme.clockIconBackground
+    // Same formula as ActiveWindow, capped to the clock's 24px content row.
+    readonly property real iconBgSize: Math.max(18, Math.min(24, Theme.barThickness - 6))
+    property int iconShape: MaterialShape.Circle
+    // Random shape, never the same pick twice in a row.
+    function pickShape(): void {
+        const list = root.shapeChoices
+        if (list.length === 0) return
+        let next = list[Math.floor(Math.random() * list.length)]
+        if (list.length > 1 && next === root.iconShape)
+            next = list[(list.indexOf(next) + 1) % list.length]
+        root.iconShape = next
+    }
+    Component.onCompleted: if (iconBgVisible) pickShape()
+    onIconBgVisibleChanged: if (iconBgVisible) pickShape()
+
     // Geteilte Text-Basis (ein Pfad für alle 5 Labels statt kopiertem Boilerplate).
     component ClockLabel: Text {
         antialiasing: Theme.textAa
@@ -62,11 +93,60 @@ Item {
         font.family: Theme.fontFamily
     }
 
+    // Clock icon (Caelestia's Material Symbols calendar_month) with an
+    // optional expressive shape background, mirroring ActiveWindow.IconBox.
+    component ClockIcon: Item {
+        id: iconBox
+        implicitWidth: root.iconBgVisible ? root.iconBgSize : iconGlyph.implicitWidth
+        implicitHeight: implicitWidth
+
+        MaterialShape {
+            anchors.centerIn: parent
+            visible: root.iconBgVisible
+            width: root.iconBgSize
+            height: root.iconBgSize
+            implicitSize: root.iconBgSize
+            color: Theme.accent
+            shape: root.iconShape
+            animationDuration: Theme.durDefaultSpatial
+            animationEasing.type: Easing.BezierSpline
+            animationEasing.bezierCurve: Theme.curveDefaultSpatial
+
+            Behavior on color {
+                enabled: Theme.animationsEnabled
+                ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
+            }
+        }
+        ClockLabel {
+            id: iconGlyph
+            anchors.centerIn: parent
+            text: "calendar_month"
+            color: root.iconBgVisible ? Theme.onAccent : root._hoverColor
+            font.family: Theme.glyphFontFamily
+            font.pixelSize: root.iconBgVisible ? Theme.fs(18) : Theme.fs(14)
+        }
+    }
+
+    // DND indicator (moved here from the control center bar module): sits at
+    // the trailing edge of the module and only shows while Do Not Disturb
+    // is on.
+    component DndIcon: ClockLabel {
+        text: "󰂛"
+        visible: Theme.dndEnabled
+        color: root._hoverColor
+        font.family: Theme.iconFontFamily
+        font.pixelSize: Theme.fs(14)
+    }
+
     Row {
         id: row
         visible: !root.vertical
         anchors.centerIn: parent
         spacing: 8
+        ClockIcon {
+            visible: Theme.clockIcon
+            anchors.verticalCenter: parent.verticalCenter
+        }
         ClockLabel {
             visible: !root.isTimeOnly
             text: root._dayStr
@@ -82,12 +162,17 @@ Item {
             font.pixelSize: Theme.fs(13); font.weight: Theme.textBold ? Font.DemiBold : Theme.barTextWeight
             anchors.verticalCenter: parent.verticalCenter
         }
+        DndIcon { anchors.verticalCenter: parent.verticalCenter }
     }
     Column {
         id: vCol
         visible: root.vertical
         anchors.centerIn: parent
         spacing: 2
+        ClockIcon {
+            visible: Theme.clockIcon
+            anchors.horizontalCenter: parent.horizontalCenter
+        }
         ClockLabel {
             text: root._hhStr
             color: root._hoverColor
@@ -127,6 +212,7 @@ Item {
             opacity: visible ? 0.85 : 0
             height: visible ? implicitHeight : 0
         }
+        DndIcon { anchors.horizontalCenter: parent.horizontalCenter }
     }
     MouseArea {
         id: mouse

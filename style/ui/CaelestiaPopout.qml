@@ -30,7 +30,7 @@
 // paint there, while the curtain clip cuts it along the fused bar edge —
 // the panel keeps reading as one mass with the bar.
 //
-// Third addition: the cross-panel morph (ui/PanelMorph). Opening a bar panel
+// Third addition: the cross-panel morph (style/ui/PanelMorph). Opening a bar panel
 // while another one is already open — and only then; a cold open always
 // plays the plain curtain run — no longer plays two independent runs. The
 // outgoing content starts leaving the instant the switch begins (instant
@@ -98,7 +98,7 @@ Item {
     readonly property real settledAxis: horizontalBar ? fullHeight : fullWidth
     readonly property real settledPerp: horizontalBar ? fullWidth : fullHeight
 
-    // ---- cross-panel morph (ui/PanelMorph, see header) -----------------
+    // ---- cross-panel morph (style/ui/PanelMorph, see header) -----------------
     // morphId is the bar module id of the host panel: it keys the published
     // card rect and tells this popout whether it is the outgoing or the
     // incoming side of a switch. `_morphIn` drives the card from the
@@ -862,7 +862,7 @@ Item {
         }
     }
 
-    // Content handoff (ui/PanelMorph choreography): the outgoing content
+    // Content handoff (style/ui/PanelMorph choreography): the outgoing content
     // leads — it fades/shifts out while the incoming card is still hidden —
     // then the incoming content arrives once the card is swapped in.
     // Hosts bind their content item's opacity to this

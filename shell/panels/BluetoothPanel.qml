@@ -4,9 +4,9 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
-import "../themes"
-import "../services"
-import "../ui"
+import "../../style/themes"
+import "../../backend/services"
+import "../../style/ui"
 
 Scope {
     id: scope

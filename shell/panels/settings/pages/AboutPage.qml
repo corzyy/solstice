@@ -2,8 +2,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 import Quickshell.Io
-import "../../../themes"
-import "../../../util"
+import "../../../../style/themes"
+import "../../../../style/ui"
 import ".."
 
 // About — Android-style system information page. Mirrors the Nexus

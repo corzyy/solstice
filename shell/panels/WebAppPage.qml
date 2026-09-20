@@ -4,14 +4,13 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell.Widgets
-import "../themes"
-import "../ui"
-import "../util"
+import "../../style/themes"
+import "../../style/ui"
 
 // Web App manager page of the launcher, reached through the prefix menu
 // ("!webapp " by default). Add writes a Chromium --app .desktop entry via
-// scripts/webapp-install.sh; Remove lists the installed web apps
-// (scripts/webapp-list.sh) and deletes them with scripts/webapp-remove.sh.
+// backend/scripts/webapp-install.sh; Remove lists the installed web apps
+// (backend/scripts/webapp-list.sh) and deletes them with backend/scripts/webapp-remove.sh.
 // State and processes live in LauncherPanel (scope); this file is the view.
 Item {
     id: root

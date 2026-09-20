@@ -43,6 +43,7 @@ Singleton {
             return {
                 id: Math.round(finiteNumber(entry.id, -1)),
                 appName: String(entry.appName || "Notification").slice(0, 120),
+                appIcon: String(entry.appIcon || "").slice(0, 300),
                 summary: String(entry.summary || "").slice(0, 300),
                 body: String(entry.body || "").slice(0, 500),
                 urgency: Math.round(finiteNumber(entry.urgency, 1)),

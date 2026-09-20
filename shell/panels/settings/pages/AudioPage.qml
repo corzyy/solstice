@@ -1,9 +1,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
-import "../../../themes"
-import "../../../services"
-import "../../../util"
+import "../../../../style/themes"
+import "../../../../backend/services"
+import "../../../../style/ui"
 import ".."
 
 // Android 17 Settings — Sound.

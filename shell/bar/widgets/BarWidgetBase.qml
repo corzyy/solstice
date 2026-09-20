@@ -16,7 +16,7 @@
 // and right-click falls through to rightClicked()/legacy actions.
 import QtQuick
 import QtQuick.Layouts
-import "../../themes"
+import "../../../style/themes"
 
 Item {
     id: root

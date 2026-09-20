@@ -1,6 +1,6 @@
 import QtQuick
-import "../../themes"
-import "../../ui"
+import "../../../style/themes"
+import "../../../style/ui"
 
 // Volume slider in the settings app's M3 expressive style (Ui.MSlider, same
 // component family as NexusControls.SliderRow), dialed to a thick rounded

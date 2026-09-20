@@ -1,11 +1,11 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../../themes"
+import "../../../../style/themes"
 import ".."
 
 // Launcher settings, reached through Settings > Panels > Launcher.
 // Covers the bar OS icon and the launcher popup (size, descriptions,
-// result cap). The panel itself lives in panels/LauncherPanel.qml.
+// result cap). The panel itself lives in shell/panels/LauncherPanel.qml.
 NexusControls.PageBase {
     id: root
     title: "Launcher"

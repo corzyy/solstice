@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import "../../themes"
-import "../../ui"
+import "../../../style/themes"
+import "../../../style/ui"
 
 // BarSlot — one bar module slot: anchor publishing, hover forwarding and
 // click/wheel routing. Placement and visibility are managed from

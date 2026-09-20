@@ -1,4 +1,5 @@
 BarAnchor 1.0 BarAnchor.qml
+ClipRect 1.0 ClipRect.qml
 PanelShell 1.0 PanelShell.qml
 PanelSpring 1.0 PanelSpring.qml
 MSlider 1.0 MSlider.qml
@@ -11,3 +12,4 @@ PowerAction 1.0 PowerAction.qml
 IslandMorph 1.0 IslandMorph.qml
 CaelestiaPopout 1.0 CaelestiaPopout.qml
 singleton PanelMorph 1.0 PanelMorph.qml
+singleton Util 1.0 Util.qml

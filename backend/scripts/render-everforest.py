@@ -16,7 +16,7 @@ if len(sys.argv) > 1:
         if len(sys.argv) > 2 and Path(sys.argv[2]).exists():
             SRC = Path(sys.argv[2])
 if SRC is None:
-    SRC = Path(f"{HOME}/.config/quickshell/solstice/themes/everforest-soft-{MODE}.json")
+    SRC = Path(f"{HOME}/.config/quickshell/solstice/style/themes/everforest-soft-{MODE}.json")
 CONFIG = Path(f"{HOME}/.config/matugen/config.toml")
 
 if not SRC.exists():
@@ -78,4 +78,10 @@ pap = Path(f"{HOME}/.cache/matugen/papirus-folders.sh")
 if pap.exists():
     subprocess.run(["bash", str(pap)])
 subprocess.run(["bash","-c","sed -i -E 's/^color_theme *= *\\\".*\\\"/color_theme = \\\"matugen\\\"/; s/^theme_background *= *.*/theme_background = False/' \"$HOME/.config/btop/btop.conf\" 2>/dev/null; pkill -USR2 btop 2>/dev/null || true"])
+# Helium: preset switches render templates above but never run their matugen
+# post_hooks, so the browser palette is applied here (no-op while Helium runs;
+# apply-helium.sh then waits for exit).
+helium = Path(f"{HOME}/.config/quickshell/solstice/backend/scripts/apply-helium.sh")
+if helium.exists():
+    subprocess.run(["bash", str(helium)])
 print("done")

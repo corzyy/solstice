@@ -4,8 +4,8 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Widgets
 import M3Shapes
-import "../../themes"
-import "../../services"
+import "../../../style/themes"
+import "../../../backend/services"
 
 // Caelestia workspace bar item, ported onto Umbriel.
 //
@@ -35,7 +35,7 @@ Rectangle {
     property var monitor: null
     property bool vertical: false
 
-    // ---- settings (Theme -> config/topbar_settings.json) ----
+    // ---- settings (Theme -> backend/config/topbar_settings.json) ----
     readonly property string displayType: Theme.workspaceDisplayType
     readonly property bool shapesMode: displayType === "shapes"
     readonly property real uiScale: Theme.workspaceScale
@@ -43,7 +43,7 @@ Rectangle {
     readonly property int maxIcons: Theme.workspaceMaxWindowIcons
     readonly property bool iconsOn: Theme.workspaceShowWindows && maxIcons > 0
     readonly property real iconSize: Math.max(7, Math.min(14, Math.round(9 * (0.6 + 0.4 * uiScale))))
-    readonly property real iconSpacing: Math.max(0, Math.round(uiScale))
+    readonly property real iconSpacing: Math.max(0, Math.round(3 * uiScale))
     readonly property real pad: Math.max(2, Math.round(2 * uiScale))
     readonly property real slot: {
         const ideal = Math.max(12, (Theme.barThickness - 10) * uiScale)
@@ -239,6 +239,60 @@ Rectangle {
         return (index >= 0 && index < m.length) ? m[index] : null
     }
 
+    // ---- window icon order ----
+    // The compositor's window list is z-order: the focused window moves to
+    // the front, which used to make the strip icons swap places on every
+    // focus change. Rank each window id on first sight instead and sort the
+    // per-workspace strips by that rank, so icons keep their slot while a
+    // window lives and new windows append at the end.
+    property var _winRank: ({})
+    property int winRankRev: 0
+    function reindexWindows(): void {
+        const list = UmbrielService.windows || []
+        const rank = _winRank
+        let next = 0
+        for (let k in rank)
+            next = Math.max(next, rank[k] + 1)
+        const seen = {}
+        let dirty = false
+        for (let i = 0; i < list.length; i++) {
+            const w = list[i]
+            const id = w ? ("" + w.id) : ""
+            if (id.length === 0)
+                continue
+            seen[id] = true
+            if (rank[id] === undefined) {
+                rank[id] = next++
+                dirty = true
+            }
+        }
+        // Forget closed windows so the map cannot grow forever.
+        const stale = []
+        for (let k in rank) {
+            if (seen[k] !== true)
+                stale.push(k)
+        }
+        for (let i = 0; i < stale.length; i++)
+            delete rank[stale[i]]
+        if (stale.length > 0)
+            dirty = true
+        if (dirty) {
+            _winRank = rank
+            winRankRev++
+        }
+    }
+    function windowRank(win: var): real {
+        winRankRev // dependency: re-sort when new windows get ranked
+        const id = win ? ("" + win.id) : ""
+        const rank = _winRank[id]
+        return rank === undefined ? Number.MAX_SAFE_INTEGER : rank
+    }
+    Connections {
+        target: UmbrielService
+        // Rank fresh windows before the delegates sort by rank.
+        function onWindowsChanged() { root.reindexWindows() }
+    }
+
     // ---- active indicator (Caelestia ActiveIndicator) ----
     property real indStart: 0
     property real indEnd: 0
@@ -249,6 +303,13 @@ Rectangle {
     property real _startDur: Theme.durDefaultSpatial
     property real _endDur: Theme.durDefaultSpatial
     property bool _indicatorDirty: false
+    // True for a short window after the tracked output changes (the bar
+    // mirrors the focused monitor). The strip then belongs to a different
+    // monitor: the old layout is unrelated to the new one, so trailing the
+    // pill across it while the delegates re-laid out with their own width
+    // animations made the whole strip wobble. Delegate and indicator
+    // animations are suppressed in that window, so the swap snaps.
+    property bool _outputSnap: false
     // Which end carries the smaller trailing cap: while the pill travels
     // up/left the end edge lags, otherwise the start edge does.
     property bool trailAtEnd: true
@@ -359,6 +420,24 @@ Rectangle {
             occBands = rects
     }
 
+    // Output swaps snap (see _outputSnap). Keep the flag up long enough to
+    // cover both umbriel streams (workspaces then windows land ~1 ms apart)
+    // before trusting animations again.
+    Timer {
+        id: outputSnapTimer
+        interval: 60
+        repeat: false
+        onTriggered: {
+            root._outputSnap = false
+            root.requestIndicatorUpdate()
+        }
+    }
+    onScreenNameChanged: {
+        _outputSnap = true
+        requestIndicatorUpdate()
+        outputSnapTimer.restart()
+    }
+
     // Re-layouts (model swap, collapse animations, bar moves) can finish after
     // the first update, so keep a short follow-up sync around transitions.
     Timer {
@@ -379,12 +458,13 @@ Rectangle {
     onWidthChanged: requestIndicatorUpdate()
     onHeightChanged: requestIndicatorUpdate()
     Component.onCompleted: {
+        reindexWindows()
         requestIndicatorUpdate()
         indicatorSync.restart()
     }
 
-    Behavior on indStart { enabled: Theme.animationsEnabled; NumberAnimation { duration: root._startDur; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
-    Behavior on indEnd { enabled: Theme.animationsEnabled; NumberAnimation { duration: root._endDur; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
+    Behavior on indStart { enabled: Theme.animationsEnabled && !root._outputSnap; NumberAnimation { duration: root._startDur; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
+    Behavior on indEnd { enabled: Theme.animationsEnabled && !root._outputSnap; NumberAnimation { duration: root._endDur; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
 
     // Occupied background (below the indicator and the delegates).
     Repeater {
@@ -581,29 +661,106 @@ Rectangle {
         }
     }
 
-    component WindowIcon: IconImage {
-        required property var win
+    component WindowIcon: Item {
+        id: winIcon
 
-        // Resolved outside the source binding: Theme.appIconFor() memoises
-        // into Theme._appIconCache, which would otherwise loop the binding.
+        required property var win
+        // Normal glyphs use the on-surface variant; the active workspace's
+        // glyphs sit on the accent pill and switch to on-accent, foreign
+        // windows dim to the divider colour.
+        property color tint: Theme.textSecondary
+
+        // Generic window glyph for windows with no resolvable identity
+        // (empty/undefined app id) or a lookup that returns nothing.
+        readonly property string placeholderGlyph: "desktop_windows"
+
+        // The settings app is a regular toplevel of this shell (app id
+        // org.quickshell, title Settings). Its strip icon follows the page
+        // currently open in the app (Theme.settingsAppIcon, published by
+        // SettingsPanel) instead of the window class. Falls back to the
+        // class lookup until the app has reported a page.
+        readonly property bool isSettingsApp: {
+            if (!win)
+                return false
+            return ("" + win.appId) === "org.quickshell" && ("" + win.title) === "Settings"
+        }
+        readonly property string settingsGlyph: isSettingsApp ? Theme.settingsAppIcon : ""
+
+        // Resolved outside the bindings: Theme.appGlyphFor() / appIconFor()
+        // memoise into Theme's caches, so calling them from a binding would
+        // write a property the binding reads and trip a binding loop.
+        property string glyph: ""
         property string iconSource: ""
-        function resolveIcon(): void {
+
+        // JS undefined and the literal strings "undefined"/"null" (some
+        // clients report those as app ids) count as missing, not as a name.
+        function usableIconValue(value: var): string {
+            if (value === undefined || value === null)
+                return ""
+            const s = ("" + value).trim()
+            const low = s.toLowerCase()
+            if (low === "undefined" || low === "null")
+                return ""
+            return s
+        }
+
+        function resolveMeta(): void {
+            const id = usableIconValue(win ? win.appId : "")
+            let g = ""
             let p = ""
             try {
-                p = Theme.appIconFor(win ? win.appId : "")
+                if (Theme.glyphWindowIcons)
+                    g = id.length > 0 ? Theme.appGlyphFor(id) : ""
+                else
+                    p = id.length > 0 ? Theme.appIconFor(id) : ""
             } catch (e) {}
+            g = usableIconValue(g)
+            p = usableIconValue(p)
+            if (glyph !== g)
+                glyph = g
             if (iconSource !== p)
                 iconSource = p
         }
-        Component.onCompleted: resolveIcon()
+        Component.onCompleted: resolveMeta()
         Connections {
             target: Theme
-            function onAppsRevChanged() { resolveIcon() }
+            function onAppsRevChanged() { winIcon.resolveMeta() }
+            function onGlyphWindowIconsChanged() { winIcon.resolveMeta() }
         }
-        source: iconSource
+
+        // What the glyph Text draws: the settings page glyph first, then the
+        // app glyph, then the placeholder. In image mode the Text only takes
+        // over for the settings glyph or when there is no image at all.
+        readonly property string textGlyph: {
+            if (winIcon.settingsGlyph.length > 0)
+                return winIcon.settingsGlyph
+            if (Theme.glyphWindowIcons)
+                return winIcon.glyph.length > 0 ? winIcon.glyph : winIcon.placeholderGlyph
+            return winIcon.iconSource.length === 0 ? winIcon.placeholderGlyph : ""
+        }
+        readonly property bool nerdGlyph: winIcon.settingsGlyph.length > 0
+
         width: root.iconSize
         height: root.iconSize
-        asynchronous: true
+
+        Text {
+            anchors.fill: parent
+            visible: winIcon.textGlyph.length > 0
+            text: winIcon.textGlyph
+            color: winIcon.tint
+            font.family: winIcon.nerdGlyph ? Theme.iconFontFamily : Theme.glyphFontFamily
+            font.pixelSize: Math.round(winIcon.height * (winIcon.nerdGlyph ? 1.05 : 1.2))
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            antialiasing: Theme.textAa
+            renderType: Theme.textRenderType
+        }
+        IconImage {
+            anchors.fill: parent
+            visible: !Theme.glyphWindowIcons && winIcon.textGlyph.length === 0
+            source: winIcon.iconSource
+            asynchronous: true
+        }
     }
 
     component WorkspaceDelegate: Item {
@@ -632,7 +789,11 @@ Rectangle {
             if (!ws || !root.iconsOn)
                 return []
             const target = Theme.workspacePerMonitor ? ("" + ws.output) : ""
-            return UmbrielService.windowsOn(target, ws.index, Theme.workspaceIgnoredTags)
+            const list = UmbrielService.windowsOn(target, ws.index, Theme.workspaceIgnoredTags)
+            // Stable icon slots: first-seen rank, not the compositor's
+            // focus-ordered list (windowsOn returns a fresh array).
+            list.sort((a, b) => root.windowRank(a) - root.windowRank(b))
+            return list
         }
         readonly property var visibleWindows: wsWindows.slice(0, root.maxIcons)
         readonly property int winCount: visibleWindows.length
@@ -658,6 +819,16 @@ Rectangle {
                 return Theme.textPrimary
             return Theme.textMuted
         }
+        readonly property color winIconColour: {
+            const ws = workspace
+            if (!ws)
+                return Theme.textSecondary
+            if (ws.foreign)
+                return Theme.divider
+            if (delegate.isActive && Theme.workspaceActiveIndicator)
+                return Theme.onAccent
+            return Theme.textSecondary
+        }
 
         onXChanged: root.requestIndicatorUpdate()
         onYChanged: root.requestIndicatorUpdate()
@@ -666,8 +837,8 @@ Rectangle {
 
         Behavior on opacity { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
         Behavior on scale { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial } }
-        Behavior on implicitWidth { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
-        Behavior on implicitHeight { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
+        Behavior on implicitWidth { enabled: Theme.animationsEnabled && !root._outputSnap; NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
+        Behavior on implicitHeight { enabled: Theme.animationsEnabled && !root._outputSnap; NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
 
         // Gap marker between non-consecutive workspaces (Caelestia GapMarkers,
         // only when showUnoccupied is off).
@@ -715,6 +886,7 @@ Rectangle {
                     delegate: WindowIcon {
                         required property var modelData
                         win: modelData
+                        tint: delegate.winIconColour
                     }
                 }
             }
@@ -741,6 +913,7 @@ Rectangle {
                     delegate: WindowIcon {
                         required property var modelData
                         win: modelData
+                        tint: delegate.winIconColour
                     }
                 }
             }

@@ -8,11 +8,10 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import M3Shapes
-import "../themes"
-import "../ui"
-import "../util"
-import "../services"
-import "../assets/emoji_data.js" as EmojiData
+import "../../style/themes"
+import "../../style/ui"
+import "../../backend/services"
+import "./emoji_data.js" as EmojiData
 import "settings" as SettingsEngine
 
 // App launcher popup. One panel, two anchor modes:
@@ -32,6 +31,10 @@ Scope {
     // instead of running; the field text lives in the item component, so it
     // is requested from here.
     signal autocompleteRequested(string text)
+    // Built-in settings entries (see builtinEntries): the settings app is a
+    // shell surface, not a launched process, so activation is handed to the
+    // shell which opens the settings window on the requested section.
+    signal settingsRequested(string section)
 
     property bool _winVisible: showLauncher
     Timer {
@@ -170,7 +173,7 @@ Scope {
     // ---- web app manager (prefix menu page) ------------------------------
     // Picking the Web App entry autocompletes to "<prefix>webapp " and opens
     // the manager; typing it directly lands there too. Add is a form that
-    // writes a Chromium --app .desktop entry (scripts/webapp-install.sh,
+    // writes a Chromium --app .desktop entry (backend/scripts/webapp-install.sh,
     // favicon fetched when no icon is given), Remove lists the installed web
     // apps (webapp-list.sh) and deletes them (webapp-remove.sh). The search
     // bar is hidden in the page; the page UI lives in WebAppPage.qml.
@@ -213,7 +216,7 @@ Scope {
         return launcherScope.webAppList
     }
 
-    readonly property string webAppScriptsDir: Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts"
+    readonly property string webAppScriptsDir: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/scripts"
     function webAppBin(kind: string): string {
         if (kind === "remove") return launcherScope.webAppScriptsDir + "/webapp-remove.sh"
         if (kind === "list") return launcherScope.webAppScriptsDir + "/webapp-list.sh"
@@ -311,7 +314,7 @@ Scope {
             }
         } else if (code === 127) {
             launcherScope.webAppOpAppend("✗ Install script not found (code 127)")
-            launcherScope.webAppStatus = "✗ Script missing: check scripts/webapp-install.sh"
+            launcherScope.webAppStatus = "✗ Script missing: check backend/scripts/webapp-install.sh"
         } else {
             launcherScope.webAppOpAppend("✗ Failed (code " + code + ")")
             if (launcherScope.webAppStatus === "" || launcherScope.webAppStatus.endsWith("…"))
@@ -399,7 +402,7 @@ Scope {
     // the text after the prefix filters label + keywords (AND per word),
     // category chips switch between recents and the Unicode groups. Picking
     // an emoji copies it (wl-copy), bumps the persisted recents and dismisses.
-    // The grid UI lives in EmojiPage.qml, the data in assets/emoji_data.js.
+    // The grid UI lives in EmojiPage.qml, the data in shell/panels/emoji_data.js.
     readonly property string emojiCommand: launcherScope.menuPrefix + "emoji"
     readonly property string emojiPrefix: launcherScope.emojiCommand + " "
     readonly property bool emojiMode: {
@@ -435,7 +438,7 @@ Scope {
     }
     FileView {
         id: emojiRecentFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/emoji_recent.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/emoji_recent.json"
         blockLoading: true; printErrors: false
         adapter: JsonAdapter { property var recent: [] }
     }
@@ -523,6 +526,7 @@ Scope {
     // display name, hidden/no-display and helper entries dropped.
     readonly property var allApps: {
         Theme.appsRev
+        Theme.hiddenAppsRev
         let out = []
         try {
             let model = DesktopEntries.applications
@@ -536,6 +540,7 @@ Scope {
                 if (!e || e.noDisplay === true) continue
                 let id = String(e.id || "")
                 if (id.startsWith("avahi-") || id.indexOf("blueman") !== -1) continue
+                if (Theme.isAppHidden(id)) continue
                 if (id.length > 0) {
                     if (seen[id] === true) continue
                     seen[id] = true
@@ -572,6 +577,79 @@ Scope {
             if (ok) out.push(e)
         }
         return out
+    }
+    // ---- built-in settings entries ---------------------------------------
+    // The settings app is part of the shell (a FloatingWindow) and has no
+    // .desktop entry, so it never shows in DesktopEntries.applications.
+    // These pseudo entries carry the same {name, comment, icon} shape the app
+    // delegate renders: a generic "Settings" row opens the window as a whole,
+    // one row per settings page (SettingsRegistry) opens that section.
+    // `settingsSection` marks them for activateCurrent; the shell maps the
+    // settingsRequested signal to openSettings().
+    readonly property var builtinEntries: {
+        const out = [{
+            id: "solstice-settings",
+            name: "Settings",
+            comment: "Solstice settings app",
+            icon: "\udb81\udc93",
+            keywords: "settings preferences configuration control panel solstice shell",
+            settingsSection: ""
+        }]
+        const pages = SettingsRegistry.entries
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i]
+            out.push({
+                id: "solstice-settings-" + page.id,
+                name: page.title,
+                comment: "Settings · " + page.desc,
+                icon: page.icon,
+                keywords: "settings " + page.keywords,
+                settingsSection: page.id
+            })
+        }
+        return out
+    }
+    // Empty query keeps the plain app list (the settings entries are search
+    // only); otherwise every query word must match name/comment/keywords.
+    // Matches split in two: a name hit for the query (`settings`, `network`)
+    // ranks above the apps, a keyword-only hit (`wifi` -> Network) below
+    // them, so short queries don't bury the app results behind the page list.
+    readonly property var builtinMatches: {
+        const q = launcherScope.filterText.trim().toLowerCase().replace(/\s+/g, " ")
+        if (q.length === 0) return { named: [], keyword: [] }
+        const words = q.split(" ").filter(w => w.length > 0)
+        const src = launcherScope.builtinEntries
+        const hits = []
+        for (let i = 0; i < src.length; i++) {
+            const e = src[i]
+            const name = e.name.toLowerCase()
+            const hay = (name + " " + e.comment + " " + e.keywords).toLowerCase()
+            let ok = true
+            for (let w = 0; w < words.length; w++) {
+                if (hay.indexOf(words[w]) === -1) { ok = false; break }
+            }
+            if (!ok) continue
+            let rank = 3
+            if (name.startsWith(q)) rank = 0
+            // Substring/name-word hits only count from two characters on:
+            // a single letter otherwise ranks almost the whole page registry
+            // above the app results.
+            else if (q.length > 1 && name.indexOf(q) !== -1) rank = 1
+            else if (q.length > 1) {
+                let allInName = true
+                for (let w = 0; w < words.length; w++) {
+                    if (name.indexOf(words[w]) === -1) { allInName = false; break }
+                }
+                if (allInName) rank = 2
+            }
+            hits.push({ rank: rank, i: i, e: e })
+        }
+        hits.sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : a.i - b.i)
+        const named = []
+        const keyword = []
+        for (let i = 0; i < hits.length; i++)
+            (hits[i].rank < 3 ? named : keyword).push(hits[i].e)
+        return { named: named, keyword: keyword }
     }
     // ---- prefix menus ----------------------------------------------------
     // The configured prefix as the first character switches the result list
@@ -610,8 +688,14 @@ Scope {
         }
         return out
     }
-    // Active list the ListView renders.
-    readonly property var results: launcherScope.menuMode ? launcherScope.filteredMenus : launcherScope.filteredApps
+    // Active list the ListView renders. Built-in settings matches sit around
+    // the apps (name hits above, keyword-only hits below) so a matching
+    // settings page is always reachable without hiding app results.
+    readonly property var results: {
+        if (launcherScope.menuMode) return launcherScope.filteredMenus
+        const b = launcherScope.builtinMatches
+        return b.named.concat(launcherScope.filteredApps).concat(b.keyword)
+    }
     onResultsChanged: launcherScope.selectedIndex = launcherScope.results.length > 0 ? 0 : -1
 
     function moveSelection(delta: int): void {
@@ -630,6 +714,13 @@ Scope {
     function activateCurrent(): void {
         let e = launcherScope.activeEntry()
         if (!e) return
+        // Built-in settings entries: hand the section to the shell (empty =
+        // the settings window's last section) and dismiss.
+        if (typeof e.settingsSection === "string") {
+            launcherScope.settingsRequested(e.settingsSection)
+            launcherScope.dismissed()
+            return
+        }
         // Action entries (Wallpaper, …) autocomplete into their picker
         // prefix instead of running; placeholders without any action dismiss.
         if (typeof e.autocomplete === "string" && e.autocomplete.length > 0) {
@@ -740,6 +831,10 @@ Scope {
         launcherScope.pageTo = launcherScope.pageCurrent
     }
     onPageCurrentChanged: {
+        // Every page switch re-rolls the search badge shape alongside the
+        // slide, so the accent shape changes with the page (on top of the
+        // per-open roll in onShowLauncherChanged).
+        launcherScope.pickBadgeShape()
         const to = launcherScope.pageCurrent
         if (to === launcherScope.pageTo) return
         // Snapshot the current poses from the OLD run state (pageOffset
@@ -773,7 +868,7 @@ Scope {
 
     // Search-badge background shape: a random Material 3 expressive shape,
     // re-rolled on every open (never twice in a row). Same idea as the
-    // workspaces focus shape (bar/widgets/Workspaces.qml); M3Shapes morphs
+    // workspaces focus shape (shell/bar/widgets/Workspaces.qml); M3Shapes morphs
     // between picks with the shared spatial token.
     readonly property var badgeShapes: [
         MaterialShape.Circle, MaterialShape.Square, MaterialShape.Slanted,
@@ -1215,6 +1310,15 @@ Scope {
                                 preferredHighlightBegin: 0.5
                                 preferredHighlightEnd: 0.5
                                 highlightRangeMode: PathView.StrictlyEnforceRange
+                                // Auto repositions (entry, model/query changes)
+                                // snap: the built-in highlight glide would play
+                                // on top of the page slide as a second, slower
+                                // horizontal run and read as the carousel
+                                // catching up with itself. Steering still
+                                // glides. syncToCurrent() raises `_snapSync`
+                                // for its currentIndex write.
+                                property bool _snapSync: false
+                                highlightMoveDuration: _snapSync ? 0 : Theme.durNormal
 
                                 path: Path {
                                     startY: wallpaperView.height / 2
@@ -1241,14 +1345,22 @@ Scope {
                                 function syncToCurrent(): void {
                                     if (!launcherScope.wallpaperMode) return
                                     let arr = launcherScope.wallpaperResults
-                                    if (arr.length === 0) { currentIndex = -1; return }
-                                    if (launcherScope.wallpaperQuery.length > 0) { currentIndex = 0; return }
-                                    let cur = "" + WallpaperService.current
-                                    let idx = -1
-                                    for (let i = 0; i < arr.length; i++) {
-                                        if (("" + arr[i].path) === cur) { idx = i; break }
+                                    // Snap the reposition (see _snapSync): the
+                                    // glide would fight the page slide.
+                                    _snapSync = true
+                                    if (arr.length === 0) {
+                                        currentIndex = -1
+                                    } else if (launcherScope.wallpaperQuery.length > 0) {
+                                        currentIndex = 0
+                                    } else {
+                                        let cur = "" + WallpaperService.current
+                                        let idx = 0
+                                        for (let i = 0; i < arr.length; i++) {
+                                            if (("" + arr[i].path) === cur) { idx = i; break }
+                                        }
+                                        currentIndex = idx
                                     }
-                                    currentIndex = idx >= 0 ? idx : 0
+                                    Qt.callLater(() => _snapSync = false)
                                 }
 
                                 delegate: Item {

@@ -2,6 +2,6 @@
     "brightness": 100,
     "fishPrompt": "minimal",
     "kittyFontSize": 13,
-    "kittyOpacity": 0.65,
+    "kittyOpacity": 1,
     "kittyPadding": 10
 }

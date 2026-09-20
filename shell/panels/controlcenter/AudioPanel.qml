@@ -5,15 +5,14 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Services.Pipewire
 import Quickshell.Wayland
-import "../../themes"
-import "../../services"
-import "../../util"
-import "../../ui"
+import "../../../style/themes"
+import "../../../backend/services"
+import "../../../style/ui"
 
 // Audio drill-in of the control center. The volume block's chevron used to
 // expand an accordion inside the CC card; it now opens this first-class
 // panel instead. The panel shares the control-center bar anchor
-// (anchorModuleId), so the cross-panel morph (ui/PanelMorph) glides the CC
+// (anchorModuleId), so the cross-panel morph (style/ui/PanelMorph) glides the CC
 // card into this one and back out of it on dismissal.
 Scope {
     id: scope

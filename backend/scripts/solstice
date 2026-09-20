@@ -16,6 +16,7 @@ fi
 INSTANCE="${SOLSTICE_INSTANCE:-solstice}"
 
 # Repo root (resolves the ~/.local/bin/solstice symlink) — used for logs/.
+# This file lives in backend/scripts/, so the root is two levels up.
 SRC="${BASH_SOURCE[0]}"
 while [[ -L "$SRC" ]]; do
     link="$(readlink "$SRC")"
@@ -24,7 +25,7 @@ while [[ -L "$SRC" ]]; do
         *)  SRC="$(dirname "$SRC")/$link" ;;
     esac
 done
-SOLSTICE_ROOT="$(cd "$(dirname "$SRC")/.." && pwd)"
+SOLSTICE_ROOT="$(cd "$(dirname "$SRC")/../.." && pwd)"
 LOG_DIR="$SOLSTICE_ROOT/logs"
 ERROR_LOG="$LOG_DIR/errors.log"
 STARTUP_LOG="$LOG_DIR/startup.log"
@@ -35,9 +36,80 @@ SECTIONS="wallpaper network bluetooth audio global umbriel panels apps about set
 
 ensure_logs() { mkdir -p "$LOG_DIR"; }
 
+# GPU / rendering tuning for NVIDIA + VSync off + hardware rendering.
+# backend/config/gpu.conf is user-editable and survives updates (install.sh
+# keeps backend/config/). Sourced first so any value set there wins; the
+# ${VAR:=default} exports below only fill in what is still unset, so values
+# exported in the calling environment also win.
+GPU_CONF="$SOLSTICE_ROOT/backend/config/gpu.conf"
+if [[ -f "$GPU_CONF" ]]; then
+    # shellcheck source=/dev/null
+    . "$GPU_CONF"
+fi
+
+# threaded render loop: decouples QML from rasterization. Qt may fall back to
+# the basic loop (single GUI-thread sync+render), which stutters on NVIDIA.
+export QSG_RENDER_LOOP="${QSG_RENDER_LOOP:=threaded}"
+# OpenGL is the stable RHI path on the NVIDIA proprietary driver; the Vulkan
+# backend has swapchain/present quirks. Never let it fall back to software.
+export QSG_RHI_BACKEND="${QSG_RHI_BACKEND:=opengl}"
+export QT_OPENGL="${QT_OPENGL:=desktop}"
+# VSync off. __GL_SYNC_TO_VBLANK is the NVIDIA/X11 switch, vblank_mode the Mesa
+# twin. NOTE: in a Wayland session presentation is owned by the compositor, so
+# these only take effect for X11/XWayland clients there.
+export __GL_SYNC_TO_VBLANK="${__GL_SYNC_TO_VBLANK:=0}"
+export vblank_mode="${vblank_mode:=0}"
+# NVIDIA's driver busy-waits on the GPU when VSync is off, pegging one core at
+# 100%; USLEEP parks it instead.
+export __GL_YIELD="${__GL_YIELD:=USLEEP}"
+
+# Frame pacing (Settings > Setup > Experimental > Debug). backend/config/
+# debug.json is the single source; the QSG_* pacing variables must exist
+# before Qt initializes, so the launcher translates the setting into the
+# environment of the shell process:
+#   fpsCap "60"       -> QSG_FIXED_ANIMATION_STEP=1
+#                        fixed-step driver, hard 60 FPS software cap
+#   fpsCap "display"  -> QSG_USE_SIMPLE_ANIMATION_DRIVER=1
+#                        elapsed-time driver; the default Qt driver is pinned
+#                        to 60 Hz on Wayland (QWaylandScreen reports no
+#                        refresh rate), while this one advances by elapsed
+#                        time and is throttled by the compositor's frame
+#                        callbacks, i.e. the output's highest refresh rate.
+#                        This is the hard cap at the display rate (144 on
+#                        the 144 Hz output, 60 on the 60 Hz one). Any other
+#                        legacy value (e.g. the old "uncapped") falls back to
+#                        "display"; true still means "60".
+# A value from gpu.conf or the calling environment always wins (we only fill
+# in what is still unset).
+apply_frame_pacing() {
+    [[ -n "${QSG_USE_SIMPLE_ANIMATION_DRIVER:-}" || -n "${QSG_FIXED_ANIMATION_STEP:-}" ]] && return
+    local conf="$SOLSTICE_ROOT/backend/config/debug.json"
+    [[ -f "$conf" ]] || return
+    local cap
+    cap="$(jq -r 'if has("fpsCap") then .fpsCap else "display" end' "$conf" 2>/dev/null)"
+    if [[ "$cap" == "60" || "$cap" == "true" ]]; then
+        export QSG_FIXED_ANIMATION_STEP=1
+    else
+        export QSG_USE_SIMPLE_ANIMATION_DRIVER=1
+    fi
+}
+
 boot_shell() {
     ensure_logs
-    "$QS_BIN" --no-color -d -c "$INSTANCE" >>"$STARTUP_LOG" 2>&1
+    apply_frame_pacing
+    {
+        printf '[%s] starting %s\n' "$(date '+%F %T')" "$QS_BIN"
+        printf '  QSG_RENDER_LOOP=%s QSG_RHI_BACKEND=%s QT_OPENGL=%s\n' \
+            "$QSG_RENDER_LOOP" "$QSG_RHI_BACKEND" "$QT_OPENGL"
+        printf '  __GL_SYNC_TO_VBLANK=%s vblank_mode=%s __GL_YIELD=%s\n' \
+            "$__GL_SYNC_TO_VBLANK" "$vblank_mode" "$__GL_YIELD"
+        printf '  QSG_USE_SIMPLE_ANIMATION_DRIVER=%s QSG_FIXED_ANIMATION_STEP=%s QSG_NO_VSYNC=%s\n' \
+            "${QSG_USE_SIMPLE_ANIMATION_DRIVER:-}" "${QSG_FIXED_ANIMATION_STEP:-}" "${QSG_NO_VSYNC:-}"
+    } >>"$STARTUP_LOG"
+    # --no-duplicate: if another instance of this config is already running
+    # (even one started via -p), exit instead of fighting it over the
+    # notification server / polkit agent DBus names.
+    "$QS_BIN" --no-color --no-duplicate -d -c "$INSTANCE" >>"$STARTUP_LOG" 2>&1
 }
 
 call() {
@@ -63,11 +135,12 @@ panel_description() {
 
 lifecycle_description() {
     case "$1" in
-        start)  echo "Start the shell in the background. Does nothing if it is already running." ;;
-        stop)   echo "Stop the running shell." ;;
-        reload) echo "Reload the shell config. Starts the shell if it is not running." ;;
-        state)  echo "Print the open/closed state of every panel." ;;
-        lock)   echo "Lock the session. Falls back to loginctl when the shell is not running." ;;
+        start)   echo "Start the shell in the background. Does nothing if it is already running." ;;
+        stop)    echo "Stop the running shell." ;;
+        reload)  echo "Reload the shell config. Starts the shell if it is not running." ;;
+        restart) echo "Stop and start the shell, re-reading backend/config/gpu.conf." ;;
+        state)   echo "Print the open/closed state of every panel." ;;
+        lock)    echo "Lock the session. Falls back to loginctl when the shell is not running." ;;
     esac
 }
 
@@ -145,6 +218,7 @@ Shell
   start                         Start the shell in the background
   stop                          Stop the shell
   reload                        Reload the config (starts it if stopped)
+  restart                       Stop and start the shell (re-reads gpu.conf)
   state                         Show which panels are currently open
   lock                          Lock the session / show the lockscreen
 
@@ -180,7 +254,7 @@ EOF
 help_topic() {
     case "${1:-}" in
         ""|help|all) usage ;;
-        start|stop|reload|state|lock)
+        start|stop|reload|restart|state|lock)
             printf 'solstice %s — shell lifecycle.\n\n' "$1"
             printf 'Usage\n  solstice %s\n\n' "$1"
             printf '%s\n' "$(lifecycle_description "$1")"
@@ -270,6 +344,12 @@ case "$cmd" in
     stop)
         if is_running; then
             "$QS_BIN" kill -c "$INSTANCE" >/dev/null 2>&1
+            # Wait until the process is really gone so an immediate start
+            # cannot collide with its notification server / polkit agent.
+            for _ in $(seq 1 50); do
+                is_running || break
+                sleep 0.1
+            done
             echo "solstice: stopped"
         else
             echo "solstice: not running"
@@ -281,6 +361,18 @@ case "$cmd" in
             boot_shell
             echo "solstice: started"
         fi ;;
+    restart)
+        if is_running; then
+            "$QS_BIN" kill -c "$INSTANCE" >/dev/null 2>&1
+            # Wait until the process is really gone so boot_shell's
+            # --no-duplicate check cannot collide with the old instance.
+            for _ in $(seq 1 50); do
+                is_running || break
+                sleep 0.1
+            done
+        fi
+        boot_shell
+        echo "solstice: restarted" ;;
     log)
         if [[ ! -f "$ERROR_LOG" ]]; then
             echo "solstice: no error log yet ($ERROR_LOG)" >&2

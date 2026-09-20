@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../themes"
+import "../../style/themes"
 
 // SettingsService — compositor-agnostic app settings (kitty, fish prompt,
 // brightness). Window-manager look lives in UmbrielService.
@@ -17,7 +17,7 @@ Singleton {
 
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/config/settings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/settings.json"
         watchChanges: true; blockLoading: true; printErrors: false
         onFileChanged: settingsReloadDebounce.restart()
         adapter: JsonAdapter {
@@ -78,7 +78,7 @@ Singleton {
         if (backendProc.running) return
         let args = _backendPending
         _backendPending = null
-        let script = Quickshell.env("HOME") + "/.config/quickshell/solstice/scripts/settings-apply.py"
+        let script = Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/scripts/settings-apply.py"
         backendProc.command = ["python3", script].concat(args)
         backendProc.running = true
     }
