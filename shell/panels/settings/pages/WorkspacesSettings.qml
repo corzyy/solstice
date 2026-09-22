@@ -4,7 +4,7 @@ import "../../../../style/themes"
 import ".."
 
 // Caelestia bar.workspaces settings (nexus/pages/panels/taskbar/
-// BarWorkspaces.qml) adapted for the Umbriel port. Shared by the Workspaces
+// BarWorkspaces.qml) adapted for the Hyprland port. Shared by the Workspaces
 // page and the Taskbar > Workspaces drill-in.
 Column {
     id: root
@@ -12,17 +12,8 @@ Column {
     spacing: 0
 
     NexusControls.SectionHeader { first: true; text: "Workspaces" }
-    NexusControls.StepperRow {
-        first: true
-        label: "Shown"
-        subtext: "Number of workspaces displayed"
-        value: Theme.workspaceShown
-        from: 1
-        to: 20
-        stepSize: 1
-        onMoved: v => Theme.setWorkspaceShown(v)
-    }
     NexusControls.ToggleRow {
+        first: true
         text: "Active indicator"
         checked: Theme.workspaceActiveIndicator
         onToggled: n => Theme.setWorkspaceActiveIndicator(n)

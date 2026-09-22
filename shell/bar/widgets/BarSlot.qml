@@ -12,7 +12,6 @@ Item {
     property bool vertical: false
     property var monitor: null
     property bool active: false
-    property string barPos: "top"
     property var barWindow: null
     property bool anchorActive: true
     // Merge support (Settings -> Panels -> Taskbar > Merge background): a
@@ -21,7 +20,7 @@ Item {
     // Item.children is not a notifiable property.
     property var mergeState: null
 
-    signal requestCalendar()
+    signal requestNotificationCenter()
     signal requestSystemTray()
     signal requestControlCenter()
     signal requestLauncher()
@@ -51,14 +50,9 @@ Item {
             let sx = p.x, sy = p.y
             let win = barWindow
             if (win) {
-                let sw = 0, sh = 0
-                try { if (win.screen) { sw = win.screen.width; sh = win.screen.height } } catch (e1) { }
-                if (!sw || !sh) { try { sw = Screen.width; sh = Screen.height } catch (e2) { } }
-                let mL = 0, mT = 0, mR = 0, mB = 0
-                try { let m = win.margins; if (m) { mL = m.left || 0; mT = m.top || 0; mR = m.right || 0; mB = m.bottom || 0 } } catch (e3) { }
-                if (barPos === "bottom" && sh > 0) { sx += mL; sy += Math.max(0, sh - win.height - mB) }
-                else if (barPos === "right" && sw > 0) { sx += Math.max(0, sw - win.width - mR); sy += mT }
-                else { sx += mL; sy += mT }
+                let mL = 0, mT = 0
+                try { let m = win.margins; if (m) { mL = m.left || 0; mT = m.top || 0 } } catch (e3) { }
+                sx += mL; sy += mT
             }
             Theme.setBarAnchor(moduleId, sx, sy, width, height)
         } catch (e) { }
@@ -72,7 +66,6 @@ Item {
         requestPublishAnchor()
         if (root.mergeState) root.mergeState.revision++
     }
-    onBarPosChanged: requestPublishAnchor()
     onBarWindowChanged: requestPublishAnchor()
     onAnchorActiveChanged: requestPublishAnchor()
     Component.onCompleted: {
@@ -139,7 +132,7 @@ Item {
     Rectangle {
         id: slotBackground
         visible: root.paintsCard
-        color: Theme.surface_container
+        color: Theme.panelCard
         antialiasing: Theme.shapesAa
         z: -1
         // Uniform card size: the cross axis always spans the bar card extent
@@ -167,7 +160,7 @@ Item {
         vertical: root.vertical
         monitor: root.monitor
         slotHovered: slotPointer.containsMouse
-        onRequestCalendar: root.requestCalendar()
+        onRequestNotificationCenter: root.requestNotificationCenter()
         onRequestSystemTray: root.requestSystemTray()
         onRequestControlCenter: root.requestControlCenter()
         onRequestLauncher: root.requestLauncher()

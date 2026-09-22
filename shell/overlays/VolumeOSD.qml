@@ -11,8 +11,6 @@ import "../../style/ui" as Ui
 Scope {
     id: osdScope
 
-    readonly property int barT: Theme.barThickness
-    readonly property string barPos: Theme.barPosition
     readonly property int quattroPad: 10
     readonly property int quattroGap: 10
     readonly property int quattroIconGap: 16
@@ -122,7 +120,7 @@ Scope {
         hideTimer.restart()
     }
 
-    // Layout-switch notification (UmbrielService -> Theme.triggerLayoutOsd).
+    // Keyboard-layout notification (HyprlandService -> Theme.triggerLayoutOsd).
     function showLayout(name: string) {
         if (!Theme.osdLayoutEnabled) return
         let l = ("" + (name || "")).trim()
@@ -181,11 +179,31 @@ Scope {
         command: ["bash", "-c", "command -v pw-mon >/dev/null 2>&1 && exec pw-mon || sleep 2147483647"]
         stdout: SplitParser {
             splitMarker: "\n"
-            onRead: data => { if (!externalDebounce.running) externalDebounce.restart() }
+            onRead: data => {
+                // PERF/STABILITY: pw-mon prints every registry/stream/link
+                // event; only volume/mute changes are relevant. Without the
+                // filter any PipeWire activity (streams appearing, metadata)
+                // forked `volume.sh` every 70ms. A line also proves pw-mon is
+                // alive, so the restart backoff resets.
+                eventMonRestart.fails = 0
+                if (!/volume|mute/i.test(data)) return
+                if (!externalDebounce.running) externalDebounce.restart()
+            }
         }
-        onExited: (code, status) => eventMonRestart.restart()
+        onExited: (code, status) => {
+            // STABILITY: back off exponentially when pw-mon dies instantly
+            // (PipeWire restart loop): 1s, 2s, 4s … max 30s.
+            eventMonRestart.fails++
+            eventMonRestart.interval = Math.min(30000, 1000 * Math.pow(2, Math.min(eventMonRestart.fails - 1, 5)))
+            eventMonRestart.restart()
+        }
     }
-    Timer { id: eventMonRestart; interval: 1000; repeat: false; onTriggered: if (!eventMonProc.running) eventMonProc.running = true }
+    Timer {
+        id: eventMonRestart
+        property int fails: 0
+        interval: 1000; repeat: false
+        onTriggered: if (!eventMonProc.running) eventMonProc.running = true
+    }
     Timer {
         id: externalDebounce
         interval: 70
@@ -210,20 +228,34 @@ Scope {
     }
 
     property bool pollOverride: false
+    // Consecutive probe failures (empty/unparseable output). Drives the
+    // poll backoff and is reset by a successful probe.
+    property int _probeFails: 0
     Process {
         id: pollProc
         command: ["bash", "-c", Quickshell.shellDir + "/backend/scripts/volume.sh get 2>/dev/null | tr -d '\\n'"]
         stdout: StdioCollector {
             onStreamFinished: {
+                // Startup grace: pw-mon's initial registry dump arrives before
+                // the OSD is initialized; without this guard a false fallback
+                // value would flash the OSD at boot.
+                if (!osdScope.inited) return
                 let txt = (text || "").trim()
-                if (txt.length === 0) return
+                if (txt.length === 0) {
+                    if (osdScope._probeFails < 100) osdScope._probeFails++
+                    return
+                }
                 let muted = txt.toLowerCase() === "muted"
                 let pct = -1
                 if (txt.endsWith("%")) {
                     let n = parseInt(txt)
                     if (!isNaN(n)) pct = n
                 }
-                if (pct < 0 && !muted) return
+                if (pct < 0 && !muted) {
+                    if (osdScope._probeFails < 100) osdScope._probeFails++
+                    return
+                }
+                osdScope._probeFails = 0
                 if (muted) pct = osdScope.displayPct
                 if (pct !== osdScope.lastPct || muted !== osdScope.lastMuted) {
                     if (!osdScope.sinkReady) {
@@ -248,8 +280,7 @@ Scope {
         id: pollTimer
         // STABILITY: back off to 30s after 3 empty probes (was 5s forever
         // when PipeWire is broken, forking volume.sh endlessly while hidden).
-        property int fails: 0
-        interval: fails >= 3 ? 30000 : 5000
+        interval: osdScope._probeFails >= 3 ? 30000 : 5000
         running: osdScope.osdVisible || !osdScope.sinkReady
         repeat: true
         triggeredOnStart: false

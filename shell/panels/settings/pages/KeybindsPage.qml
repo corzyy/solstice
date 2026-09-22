@@ -9,14 +9,14 @@ import ".."
 
 // Keybinds — one page for every shortcut, in three layers: the shell action
 // catalog (launcher, power menu, settings, screenshot, lock, …) stays on top,
-// followed by the curated Umbriel compositor groups and finally any remaining
-// binds from the compositor keybind files. Each row shows the effective
-// Umbriel chord and can be rebound in place: shell/user binds live in
-// ~/.config/umbriel/configs/keybinds-user.toml, system compositor binds in
-// keybinds-system.toml, and rows edit whichever file currently holds them.
+// followed by the curated Hyprland compositor groups and finally any remaining
+// binds from the compositor bind files. Each row shows the effective chord
+// and can be rebound in place: system compositor binds live in
+// ~/.config/hypr/configs/binds/system.lua, user binds in
+// binds/user.lua, and rows edit whichever file currently holds them.
 //
 // Holding a row captures the next chord. A Wayland shortcuts inhibitor
-// (auto-activated by Umbriel when it advertises the protocol) keeps the
+// (auto-activated by Hyprland when it advertises the protocol) keeps the
 // compositor from consuming the keys we want to record; without it chords the
 // compositor already binds fire instead of reaching the capture. Escape
 // cancels, a single modifier is recorded on tap.
@@ -36,7 +36,7 @@ NexusControls.PageBase {
     property bool messageIsError: false
     property string message: ""
 
-    readonly property string scriptPath: Quickshell.shellDir + "/backend/scripts/umbriel-keybinds.py"
+    readonly property string scriptPath: Quickshell.shellDir + "/backend/scripts/hyprland-keybinds.py"
     readonly property string appsScriptPath: Quickshell.shellDir + "/backend/scripts/apps-manage.py"
     // Resolved default terminal / browser / file manager (the same state the
     // Apps page edits). Their spawn actions get their own catalog group so
@@ -49,7 +49,7 @@ NexusControls.PageBase {
         { id: "settings", label: "Settings", subtext: "Toggle the settings window", action: "spawn:solstice module settings toggle" },
         { id: "screenshot", label: "Screenshot", subtext: "Region, window or fullscreen capture", action: "spawn:solstice module screenshot toggle" },
         { id: "lock", label: "Lock screen", subtext: "Lock the session", action: "spawn:solstice lock" },
-        { id: "calendar", label: "Calendar", subtext: "Toggle the calendar panel", action: "spawn:solstice module calendar toggle" },
+        { id: "notificationcenter", label: "Notification center", subtext: "Toggle the notification center", action: "spawn:solstice module notificationcenter toggle" },
         { id: "systemtray", label: "System tray", subtext: "Toggle the system tray panel", action: "spawn:solstice module systemtray toggle" },
         { id: "reload", label: "Reload shell", subtext: "Restart Quickshell and apply config changes", action: "spawn:solstice reload" }
     ]
@@ -78,37 +78,35 @@ NexusControls.PageBase {
         }
         return out
     }
-    // Curated useful Umbriel actions, grouped like the compositor cheatsheet.
-    // Actions bound in keybinds-system.toml are edited there, user binds in
-    // keybinds-user.toml, so every row round-trips to its own file.
+    // Curated useful Hyprland actions, grouped like the compositor cheatsheet.
+    // Actions bound in binds/system.lua are edited there, user binds in
+    // binds/user.lua, so every row round-trips to its own file.
+    // Action ids resolve through backend/scripts/hyprland-keybinds.py
+    // (ACTIONS): window/focus binds use the lua dispatcher forms, workspace
+    // cycling and monitor moves go through `hyprctl dispatch`.
     readonly property var compositorCatalog: [
-        { group: "Windows", id: "close", label: "Close window", subtext: "Close the focused window", action: "window-close" },
-        { group: "Windows", id: "float", label: "Toggle floating", subtext: "Float or tile the focused window", action: "window-toggle-floating" },
-        { group: "Windows", id: "fullscreen", label: "Toggle fullscreen", subtext: "Fullscreen the focused window", action: "window-toggle-fullscreen" },
-        { group: "Windows", id: "maximize", label: "Toggle maximize", subtext: "Full width, ignoring gaps and borders", action: "window-toggle-maximize-to-edges" },
-        { group: "Windows", id: "pin", label: "Pin window", subtext: "Keep the window above the others", action: "window-toggle-pinned" },
-        { group: "Windows", id: "center", label: "Center window", subtext: "Center the focused floating window", action: "window-center" },
-        { group: "Focus & layout", id: "focus-left", label: "Focus left", subtext: "Focus the window to the left", action: "window-focus-left" },
-        { group: "Focus & layout", id: "focus-right", label: "Focus right", subtext: "Focus the window to the right", action: "window-focus-right" },
-        { group: "Focus & layout", id: "focus-up", label: "Focus up", subtext: "Focus the next window up", action: "window-focus-up" },
-        { group: "Focus & layout", id: "focus-down", label: "Focus down", subtext: "Focus the next window down", action: "window-focus-down" },
-        { group: "Focus & layout", id: "column-left", label: "Move column left", subtext: "Move the focused column one position left", action: "column-move-left" },
-        { group: "Focus & layout", id: "column-right", label: "Move column right", subtext: "Move the focused column one position right", action: "column-move-right" },
-        { group: "Focus & layout", id: "move-up", label: "Move window up", subtext: "Move the window up in its column", action: "window-move-up" },
-        { group: "Focus & layout", id: "move-down", label: "Move window down", subtext: "Move the window down in its column", action: "window-move-down" },
-        { group: "Focus & layout", id: "layout", label: "Cycle layout", subtext: "Next layout mode on the workspace", action: "workspace-set-layout:toggle" },
-        { group: "Workspaces", id: "ws-next", label: "Next workspace", subtext: "Switch to the next workspace", action: "workspace-next" },
-        { group: "Workspaces", id: "ws-prev", label: "Previous workspace", subtext: "Switch to the previous workspace", action: "workspace-previous" },
-        { group: "Workspaces", id: "ws-move-next", label: "Move window to next workspace", subtext: "Take the focused window along", action: "window-move-to-workspace-next" },
-        { group: "Workspaces", id: "ws-move-prev", label: "Move window to previous workspace", subtext: "Take the focused window along", action: "window-move-to-workspace-previous" },
-        { group: "Overview & scratchpads", id: "overview", label: "Toggle overview", subtext: "Workspace overview", action: "overview-toggle" },
-        { group: "Overview & scratchpads", id: "scratchpad", label: "Toggle scratchpad", subtext: "Show or hide scratchpad windows", action: "scratchpad-toggle" },
-        { group: "Overview & scratchpads", id: "to-scratchpad", label: "Move to scratchpad", subtext: "Move the focused window into the scratchpad", action: "window-move-to-scratchpad" },
-        { group: "Overview & scratchpads", id: "from-scratchpad", label: "Restore from scratchpad", subtext: "Return a scratchpad window to its workspace", action: "window-restore-from-scratchpad" },
-        { group: "Outputs", id: "out-left", label: "Focus output left", subtext: "Focus the monitor to the left", action: "output-focus-left" },
-        { group: "Outputs", id: "out-right", label: "Focus output right", subtext: "Focus the monitor to the right", action: "output-focus-right" },
-        { group: "Outputs", id: "out-move-left", label: "Move window to output left", subtext: "Send the focused window to the left monitor", action: "window-move-to-output-left" },
-        { group: "Outputs", id: "out-move-right", label: "Move window to output right", subtext: "Send the focused window to the right monitor", action: "window-move-to-output-right" },
+        { group: "Windows", id: "close", label: "Close window", subtext: "Close the focused window", action: "close" },
+        { group: "Windows", id: "float", label: "Toggle floating", subtext: "Float or tile the focused window", action: "toggle-float" },
+        { group: "Windows", id: "fullscreen", label: "Toggle fullscreen", subtext: "Fullscreen the focused window", action: "toggle-fullscreen" },
+        { group: "Windows", id: "maximize", label: "Toggle maximize", subtext: "Maximize, keeping gaps and borders", action: "toggle-maximize" },
+        { group: "Focus & layout", id: "focus-left", label: "Focus left", subtext: "Focus the window to the left", action: "focus-left" },
+        { group: "Focus & layout", id: "focus-right", label: "Focus right", subtext: "Focus the window to the right", action: "focus-right" },
+        { group: "Focus & layout", id: "focus-up", label: "Focus up", subtext: "Focus the window above", action: "focus-up" },
+        { group: "Focus & layout", id: "focus-down", label: "Focus down", subtext: "Focus the window below", action: "focus-down" },
+        { group: "Focus & layout", id: "move-left", label: "Move window left", subtext: "Move the focused window one position left", action: "move-left" },
+        { group: "Focus & layout", id: "move-right", label: "Move window right", subtext: "Move the focused window one position right", action: "move-right" },
+        { group: "Focus & layout", id: "move-up", label: "Move window up", subtext: "Move the window up", action: "move-up" },
+        { group: "Focus & layout", id: "move-down", label: "Move window down", subtext: "Move the window down", action: "move-down" },
+        { group: "Focus & layout", id: "layout-toggle", label: "Toggle layout", subtext: "Switch the tiling layout (master / dwindle / scrolling)", action: "layout-toggle" },
+        { group: "Workspaces", id: "ws-next", label: "Next workspace", subtext: "Switch to the next workspace", action: "ws-next" },
+        { group: "Workspaces", id: "ws-prev", label: "Previous workspace", subtext: "Switch to the previous workspace", action: "ws-prev" },
+        { group: "Workspaces", id: "ws-move-next", label: "Move window to next workspace", subtext: "Take the focused window along", action: "ws-move-next" },
+        { group: "Workspaces", id: "ws-move-prev", label: "Move window to previous workspace", subtext: "Take the focused window along", action: "ws-move-prev" },
+        { group: "Special", id: "scratchpad", label: "Toggle scratchpad", subtext: "Special workspace", action: "scratchpad" },
+        { group: "Outputs", id: "out-left", label: "Focus monitor left", subtext: "Focus the monitor to the left", action: "out-left" },
+        { group: "Outputs", id: "out-right", label: "Focus monitor right", subtext: "Focus the monitor to the right", action: "out-right" },
+        { group: "Outputs", id: "out-move-left", label: "Move window to monitor left", subtext: "Send the focused window to the left monitor", action: "out-move-left" },
+        { group: "Outputs", id: "out-move-right", label: "Move window to monitor right", subtext: "Send the focused window to the right monitor", action: "out-move-right" },
         { group: "Media & brightness", id: "vol-up", label: "Volume up", subtext: "Raise the default sink volume", action: "spawn:wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+" },
         { group: "Media & brightness", id: "vol-down", label: "Volume down", subtext: "Lower the default sink volume", action: "spawn:wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-" },
         { group: "Media & brightness", id: "vol-mute", label: "Mute output", subtext: "Toggle sink mute", action: "spawn:wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle" },
@@ -118,15 +116,14 @@ NexusControls.PageBase {
         { group: "Media & brightness", id: "player-play", label: "Play / pause", subtext: "Toggle media playback", action: "spawn:playerctl play-pause" },
         { group: "Media & brightness", id: "player-next", label: "Next track", subtext: "Skip to the next track", action: "spawn:playerctl next" },
         { group: "Media & brightness", id: "player-prev", label: "Previous track", subtext: "Go back one track", action: "spawn:playerctl previous" },
-        { group: "Session", id: "config-reload", label: "Reload compositor config", subtext: "Re-read the Umbriel config files", action: "config-reload" },
-        { group: "Session", id: "cheatsheet", label: "Keybind cheatsheet", subtext: "Show the compositor's own bind overlay", action: "cheatsheet-toggle" },
-        { group: "Session", id: "quit", label: "Quit session", subtext: "Umbriel asks for confirmation", action: "session-quit" }
+        { group: "Session", id: "config-reload", label: "Reload compositor config", subtext: "Re-read the Hyprland config files", action: "spawn:hyprctl reload" },
+        { group: "Session", id: "quit", label: "Quit session", subtext: "Exit Hyprland", action: "quit" }
     ]
     // Actions kept off the page (the config bind stays active).
     readonly property var hiddenActions: ["spawn:opencode"]
     // Shell actions first, then the default-application launchers and the
     // compositor groups, then every remaining effective bind in the
-    // compositor files so nothing in keybinds-system/user.toml is unreachable.
+    // compositor files so nothing in binds/system.lua/user.lua is unreachable.
     // Shell spawns are covered by the shell catalog, app launchers by the
     // app catalog, and both are excluded from "Other binds".
     readonly property var catalog: {
@@ -297,21 +294,21 @@ NexusControls.PageBase {
         root.applyBind(entry.action, chord, root.editSourceFor(entry.action))
     }
 
-    // ---- Qt key -> Umbriel chord ----------------------------------------
-    // Chords use XKB keysym names, case-insensitive ("Mod+Space", "Comma",
-    // "XF86AudioMute"). Shifted symbols map back to the base key so the
-    // stored chord reads "Mod+Shift+1", matching Umbriel's raw-keysym match.
+    // ---- Qt key -> Hyprland chord --------------------------------------
+    // Chords use Hyprland key names ("SUPER + Space", "XF86AudioMute").
+    // Shifted symbols map back to the base key so the stored chord reads
+    // "SUPER + Shift + 1".
     function modifierName(key: int): string {
         if (key === Qt.Key_Shift) return "Shift"
         if (key === Qt.Key_Control) return "Ctrl"
         if (key === Qt.Key_Alt) return "Alt"
         if (key === Qt.Key_Meta || key === Qt.Key_Super_L || key === Qt.Key_Super_R
-                || key === Qt.Key_Hyper_L || key === Qt.Key_Hyper_R) return "Mod"
+                || key === Qt.Key_Hyper_L || key === Qt.Key_Hyper_R) return "SUPER"
         return ""
     }
     function chordFor(event): string {
         let mods = []
-        if (event.modifiers & Qt.MetaModifier) mods.push("Mod")
+        if (event.modifiers & Qt.MetaModifier) mods.push("SUPER")
         if (event.modifiers & Qt.ControlModifier) mods.push("Ctrl")
         if (event.modifiers & Qt.AltModifier) mods.push("Alt")
         if (event.modifiers & Qt.ShiftModifier) mods.push("Shift")
@@ -474,7 +471,7 @@ NexusControls.PageBase {
                     root.binds = Array.isArray(parsed) ? parsed : []
                 } catch (e) {
                     root.binds = []
-                    root.setMessage("Could not read the Umbriel keybinds.", true)
+                    root.setMessage("Could not read the Hyprland binds.", true)
                 }
             }
         }
@@ -555,7 +552,7 @@ NexusControls.PageBase {
         renderType: Theme.textRenderType
     }
     NexusControls.Note {
-        text: "Rebinding replaces the chord on its line in keybinds-system.toml (compositor defaults) or ~/.config/umbriel/configs/keybinds-user.toml (your binds) — comments are kept — and reloads Umbriel. “Mod” is the compositor's mod key (general.mod_key, currently Super)."
+        text: "Rebinding replaces the chord on its line in binds/system.lua (compositor defaults) or ~/.config/hypr/configs/binds/user.lua (your binds) — comments are kept — and reloads Hyprland. “SUPER” is the Super key."
     }
 
     // KeyRow = InfoRow shape with a key cap + clear button. The delegate wires

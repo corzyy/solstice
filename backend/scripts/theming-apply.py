@@ -111,7 +111,7 @@ def icon(pairs: dict) -> None:
         except OSError:
             continue
         if re.search(r"^icon_theme=", txt, re.M):
-            txt = re.sub(r"^icon_theme=.*$", f"icon_theme={theme}", txt, flags=re.M)
+            txt = re.sub(r"^icon_theme=.*$", lambda m: "icon_theme=" + theme, txt, flags=re.M)
         elif "[Appearance]" in txt:
             txt = txt.replace("[Appearance]", "[Appearance]\nicon_theme=" + theme, 1)
         else:
@@ -128,7 +128,7 @@ def cursor(pairs: dict) -> None:
     theme = pairs.get("theme", t.get("cursorTheme", "System Default")).strip() or "System Default"
     try:
         size = max(12, min(128, int(float(pairs.get("size", t.get("cursorSize", 24))))))
-    except ValueError:
+    except (TypeError, ValueError):
         size = 24
     t["cursorTheme"] = theme
     t["cursorSize"] = size
@@ -158,6 +158,9 @@ def cursor(pairs: dict) -> None:
 def gtk(pairs: dict) -> None:
     mode = matugen_mode()
     script = SOLSTICE_SCRIPTS / "apply-gtk.sh"
+    if not script.exists():
+        print("apply-gtk.sh not found", file=sys.stderr)
+        return
     subprocess.run(["bash", str(script), mode], check=False)
     if theming().get("syncModeWithPortal", True):
         scheme = "prefer-dark" if mode == "dark" else "prefer-light"
@@ -167,6 +170,9 @@ def gtk(pairs: dict) -> None:
 # ------------------------------------------------------------------- qt ---
 def qt(pairs: dict) -> None:
     script = SOLSTICE_SCRIPTS / "apply-qt.sh"
+    if not script.exists():
+        print("apply-qt.sh not found", file=sys.stderr)
+        return
     subprocess.run(["bash", str(script)], check=False)
 
 
@@ -208,9 +214,11 @@ def terminals(pairs: dict) -> None:
     if runner.exists() and os.access(runner, os.X_OK):
         subprocess.run(["bash", str(runner), "image", wall,
                         "-t", mtype, "-m", "light", "--prefer", "saturation"],
-                       check=False)
+                       check=False, timeout=60)
     else:
-        sh(f"matugen image \"{wall}\" -t '{mtype}' -m light --prefer saturation")
+        # argv, not a shell string: the wallpaper path may contain quotes.
+        subprocess.run(["matugen", "image", wall, "-t", mtype, "-m", "light",
+                        "--prefer", "saturation"], check=False, timeout=60)
 
 
 # -------------------------------------------------------------- template --
@@ -232,6 +240,7 @@ TEMPLATE_GROUPS = {
     "obs": ["obs", "obs-native"],
     "opencode": ["opencode"],
     "papirus": ["papirus"],
+    "pinta": ["pinta"],
     "prismlauncher": ["prismlauncher"],
 }
 
@@ -257,6 +266,7 @@ TEMPLATE_DEFAULTS = {
     "obs-native": ('[templates.obs-native]\ninput_path = "{H}/.config/matugen/templates/matugen.obt"\noutput_path = "{H}/.config/obs-studio/themes/matugen.obt"\n',),
     "opencode": ('[templates.opencode]\ninput_path = "{H}/.config/matugen/templates/opencode.json"\noutput_path = "{H}/.config/opencode/themes/matugen.json"\n',),
     "papirus": ('[templates.papirus]\ninput_path = "{H}/.config/matugen/templates/papirus-folders.sh"\noutput_path = "{H}/.cache/matugen/papirus-folders.sh"\npost_hook = "bash {H}/.cache/matugen/papirus-folders.sh"\n',),
+    "pinta": ('[templates.pinta]\ninput_path = "{H}/.config/matugen/templates/pinta-palette.txt"\noutput_path = "{H}/.config/Pinta/palette.txt"\n',),
     "prismlauncher": ('[templates.prismlauncher]\ninput_path = "{H}/.config/matugen/templates/prismlauncher.json"\noutput_path = "{H}/.local/share/PrismLauncher/themes/Matugen/theme.json"\n',),
 }
 

@@ -39,12 +39,29 @@ fi
 # Work on the same filesystem as DEST so the swap below is a fast rename.
 PARENT="$(dirname "$DEST")"
 mkdir -p "$PARENT"
+# STABILITY: serialize concurrent install/update runs — two runs swapping the
+# same $DEST can leave a partial install behind.
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"$PARENT/.solstice-install.lock"
+    if ! flock -n 9; then
+        echo "Another solstice install/update is already running — aborting." >&2
+        exit 1
+    fi
+fi
 TMP="$(mktemp -d "$PARENT/.solstice-update.XXXXXX")"
-cleanup() { rm -rf "$TMP"; }
+cleanup() {
+    # STABILITY: an interrupt between the two swap renames leaves the previous
+    # install in $TMP/old with $DEST missing. Restore it before removing the
+    # staging dir — the old install is otherwise unrecoverable.
+    if [[ -n "${TMP:-}" && -d "$TMP/old" && ! -e "$DEST" ]]; then
+        mv "$TMP/old" "$DEST" 2>/dev/null || true
+    fi
+    [[ -n "${TMP:-}" ]] && rm -rf "$TMP"
+}
 trap cleanup EXIT INT TERM
 
 echo "Cloning $REPO ..."
-if ! git clone --depth 1 "$REPO" "$TMP/repo"; then
+if ! timeout 300 git clone --depth 1 "$REPO" "$TMP/repo"; then
     echo "git clone failed." >&2
     exit 1
 fi
@@ -95,19 +112,29 @@ if ! mv "$TMP/repo" "$DEST"; then
     exit 1
 fi
 
+# STABILITY: copy into a sibling, then rename. The old `rm -rf` + copy lost
+# the user's config if the script died in between.
 if [[ -d "$KEEP/backend/config" ]]; then
-    rm -rf "$DEST/backend/config"
-    cp -a "$KEEP/backend/config" "$DEST/backend/config"
+    rm -rf "$DEST/backend/config.new"
+    cp -a "$KEEP/backend/config" "$DEST/backend/config.new"
+    rm -rf "$DEST/backend/config.old"
+    [[ -d "$DEST/backend/config" ]] && mv "$DEST/backend/config" "$DEST/backend/config.old"
+    mv "$DEST/backend/config.new" "$DEST/backend/config"
+    rm -rf "$DEST/backend/config.old"
 fi
 if [[ -d "$KEEP/style/themes/snapshots" ]]; then
     mkdir -p "$DEST/style/themes"
-    rm -rf "$DEST/style/themes/snapshots"
-    cp -a "$KEEP/style/themes/snapshots" "$DEST/style/themes/snapshots"
+    rm -rf "$DEST/style/themes/snapshots.new"
+    cp -a "$KEEP/style/themes/snapshots" "$DEST/style/themes/snapshots.new"
+    rm -rf "$DEST/style/themes/snapshots.old"
+    [[ -d "$DEST/style/themes/snapshots" ]] && mv "$DEST/style/themes/snapshots" "$DEST/style/themes/snapshots.old"
+    mv "$DEST/style/themes/snapshots.new" "$DEST/style/themes/snapshots"
+    rm -rf "$DEST/style/themes/snapshots.old"
 fi
 
 chmod +x "$DEST/backend/scripts/"*.sh "$DEST/backend/scripts/solstice" 2>/dev/null || true
 
-# Keep the `solstice` CLI in PATH pointing at the live install: Umbriel's
+# Keep the `solstice` CLI in PATH pointing at the live install: Hyprland's
 # autostart and all shell keybinds spawn through it. Skipped for test installs.
 if [[ -z "${SOLSTICE_DEST:-}" ]]; then
     BIN_DIR="$HOME/.local/bin"
@@ -126,7 +153,7 @@ elif [[ -n "${SOLSTICE_DEST:-}" ]]; then
 elif command -v quickshell >/dev/null 2>&1; then
     echo ""
     echo "Restarting shell ..."
-    if quickshell ipc -c solstice call solstice reload >/dev/null 2>&1; then
+    if timeout 10 quickshell ipc -c solstice call solstice reload >/dev/null 2>&1; then
         echo "Done."
     else
         echo "Update installed, but the automatic restart failed."

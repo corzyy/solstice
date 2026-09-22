@@ -1,11 +1,11 @@
 {
     "backgrounds": {
         "activewindow": false,
-        "clock": true,
-        "controlcenter": true,
+        "clock": false,
+        "controlcenter": false,
         "launcher": false,
-        "systemtray": true,
-        "workspaces": true
+        "systemtray": false,
+        "workspaces": false
     },
     "merge": true
 }

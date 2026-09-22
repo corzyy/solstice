@@ -47,15 +47,15 @@ Scope {
     }
 
     // ---- session actions ----
-    // Poweroff/reboot go through systemd; logout quits the Umbriel session
-    // (native path first, logind fallback so other compositors still work).
+    // Poweroff/reboot go through systemd; logout exits the Hyprland session
+    // (native dispatch first, logind fallback so the shell stays usable if
+    // the compositor is not answering).
     // The menu stays mapped while an action runs: destroying the panel would
     // take its Process children with it.
     function runLogout(): void {
         if (logoutProc.running) return
         logoutProc.command = ["bash", "-c",
-            "umbriel msg session-quit:skip-confirmation 2>/dev/null"
-            + " || umbriel msg session-quit skip-confirmation 2>/dev/null"
+            "hyprctl dispatch 'hl.dsp.exit()' 2>/dev/null"
             + " || loginctl terminate-session \"$XDG_SESSION_ID\""]
         logoutProc.running = true
     }
@@ -89,18 +89,56 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "powerpanel"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
 
-            // Android power-menu run: fade + settle (FadeThrough) for the
-            // card, scrim fades with it. The async PanelLoader creates the
-            // delegate with showPower already true (no active change fires),
-            // so a cold open replays the enter run explicitly.
+            // Android power-menu run: fade + zoom (FadeThrough) for the
+            // card, scrim fades with it.
+            //
+            // The enter run is gated on the first presented frame
+            // (enterGate): the layer surface needs a moment to map after
+            // the async Loader creates this delegate, and starting `phase`
+            // before that eats the head of the 300ms run — the card would
+            // jump in mid-fade instead of fading+zooming smoothly. Same
+            // reason as CaelestiaPopout's enterFrame. The exit run needs
+            // no gate (the surface is already mapped).
+            // The async PanelLoader creates the delegate with showPower
+            // already true (no active change fires), so a cold open arms
+            // the gate explicitly below.
+            FrameAnimation {
+                id: enterGate
+                running: false
+                onTriggered: {
+                    running = false
+                    // A close that landed before the first frame must not
+                    // arm a run for a panel that is already dismissed.
+                    if (scope.showPower) menuMotion.armed = true
+                }
+            }
             Motion {
                 id: menuMotion
-                active: scope.showPower
+                property bool armed: false
+                active: scope.showPower && menuMotion.armed
                 pattern: Motion.FadeThrough
             }
-            Component.onCompleted: if (scope.showPower) menuMotion.replay()
+            Component.onCompleted: {
+                HyprlandService.registerPanelWindow(this)
+                if (scope.showPower) enterGate.running = true
+            }
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
+            Connections {
+                target: scope
+                function onShowPowerChanged() {
+                    if (scope.showPower) {
+                        menuMotion.armed = false
+                        enterGate.restart()
+                    } else {
+                        enterGate.stop()
+                        menuMotion.armed = false
+                    }
+                }
+            }
 
             Item {
                 anchors.fill: parent

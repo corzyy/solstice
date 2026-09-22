@@ -10,7 +10,8 @@ import "../../../style/ui"
 import "./pages" as Pages
 
 // Settings window — 1:1 Caelestia Nexus port (caelestia-dots/shell):
-//   - window: height = 70% screen, 16:9, radius = Theme.cornerRadius
+//   - window: height = 70% screen, 16:9, radius = Hyprland window rounding
+//     (Theme.cornerRadius fallback off Hyprland / before Hyprland values load)
 //   - nav pane: margins 16, width min(600, width/3), SearchBar +
 //     NavLocations list (filled cards, circle icon, 32/28/4 radii, press 12)
 //   - pages: margins 28, content capped at 800, StackView push/pop animation
@@ -85,13 +86,21 @@ Scope {
     // and deeper scrollables (sliders, wallpaper grid) still handle the wheel
     // first because they sit closer to the cursor in the delivery chain.
     readonly property real wheelNotchPixels: 180
-    function wheelScroll(flick, event): void {
+    function wheelScroll(flick, event, spring): void {
         const angle = event.angleDelta.y
         const pixel = event.pixelDelta.y
         let dy = 0
         if (angle !== 0) dy = angle / 120 * settingsScope.wheelNotchPixels
         else if (pixel !== 0) dy = pixel
         else return
+        // Edge feedback: the tick landing on the top/bottom kicks the
+        // spring with the leftover amount, further pushes keep throbbing
+        // (OverscrollSpring.scrollY) instead of stopping dead.
+        if (spring) {
+            spring.scrollY(dy)
+            event.accepted = true
+            return
+        }
         flick.contentY -= dy
         const maxY = Math.max(0, flick.contentHeight - flick.height)
         flick.contentY = Math.max(0, Math.min(maxY, flick.contentY))
@@ -99,8 +108,9 @@ Scope {
     }
     function selectSection(id: string): void {
         // Legacy ids: "bar" was the pre-Panels id, "notif" now lives as a
-        // Panels sub-page.
+        // Panels sub-page, "niri" was renamed to "hyprland".
         let nid = (id === "bar" || id === "notif") ? "panels" : id
+        if (nid === "niri") nid = "hyprland"
         section = sectionIds.indexOf(nid) >= 0 ? nid : "wallpaper"
         // In compact mode selecting opens the page pane (back button returns
         // to the list); in wide mode both panes stay visible so this is inert.
@@ -120,7 +130,7 @@ Scope {
         case "wallpaper": return wallpaperStylesComp
         case "network": return networkComp
         case "bluetooth": return bluetoothComp
-        case "umbriel": return umbrielComp
+        case "hyprland": return hyprlandComp
         case "audio": return audioComp
         case "apps": return appsComp
         case "panels": return panelsComp
@@ -142,7 +152,7 @@ Scope {
             // Fresh open starts on the category list when compact.
             pagePane = false
             SettingsService.refresh()
-            try { UmbrielService.refresh() } catch (e) {}
+            try { HyprlandService.refresh() } catch (e) {}
         } else {
             filterText = ""
             hideTimer.restart()
@@ -257,6 +267,9 @@ Scope {
             // window), and clicks on empty space simply do nothing.
             anchors.fill: parent
             color: Theme.panelWindowSurface
+            // Regular toplevel clipped by the compositor rounding, which
+            // mirrors the shell rounding (Appearance > Rounding), so the
+            // window simply tracks it.
             radius: Theme.cornerRadius
             clip: true
             Motion {
@@ -313,18 +326,21 @@ Scope {
                         text: settingsScope.filterText
                         onTextChanged2: t => settingsScope.filterText = t
                     }
-                    Flickable {
-                        id: navFlick
+                    Item {
                         width: parent.width
                         height: navCol.height - navSearch.height - navCol.spacing
-                        clip: true
-                        contentHeight: navList.implicitHeight
-                        contentWidth: width
-                        boundsBehavior: Flickable.StopAtBounds
-                        flickableDirection: Flickable.VerticalFlick
-                        WheelHandler {
-                            onWheel: event => settingsScope.wheelScroll(navFlick, event)
-                        }
+                        Flickable {
+                            id: navFlick
+                            anchors.fill: parent
+                            clip: true
+                            contentHeight: navList.implicitHeight
+                            contentWidth: width
+                            boundsBehavior: Flickable.DragAndOvershootBounds
+                            boundsMovement: Flickable.FollowBoundsBehavior
+                            flickableDirection: Flickable.VerticalFlick
+                            WheelHandler {
+                                onWheel: event => settingsScope.wheelScroll(navFlick, event, navSpring)
+                            }
                         Column {
                             id: navList
                             width: navFlick.width
@@ -448,6 +464,11 @@ Scope {
                                 }
                             }
                         }
+                        }
+                        EdgeFade { flick: navFlick; fadeColor: Theme.panelWindowSurface }
+                        // No wheel observer: the WheelHandler above already
+                        // routes every tick through scrollY().
+                        OverscrollSpring { id: navSpring; flick: navFlick; interceptWheel: false }
                     }
                 }
                 // ---- pages ----------------------------------------------------
@@ -597,10 +618,11 @@ Scope {
                                 clip: true
                                 contentHeight: pageCol.implicitHeight + 28
                                 contentWidth: width
-                                boundsBehavior: Flickable.StopAtBounds
+                                boundsBehavior: Flickable.DragAndOvershootBounds
+                                boundsMovement: Flickable.FollowBoundsBehavior
                                 flickableDirection: Flickable.VerticalFlick
                                 WheelHandler {
-                                    onWheel: event => settingsScope.wheelScroll(pageFlick, event)
+                                    onWheel: event => settingsScope.wheelScroll(pageFlick, event, pageSpring)
                                 }
                                 Column {
                                     id: pageCol
@@ -617,6 +639,10 @@ Scope {
                                     Item { width: 1; height: 28 }
                                 }
                             }
+                            EdgeFade { flick: pageFlick; fadeColor: Theme.panelWindowSurface }
+                            // No wheel observer: the WheelHandler above already
+                            // routes every tick through scrollY().
+                            OverscrollSpring { id: pageSpring; flick: pageFlick; interceptWheel: false }
                         }
                     }
                 }
@@ -652,7 +678,7 @@ Scope {
         }
     }
     Component { id: globalComp; Pages.GlobalPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
-    Component { id: umbrielComp; Pages.UmbrielPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
+    Component { id: hyprlandComp; Pages.HyprlandPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
     Component { id: audioComp; Pages.AudioPage { showBack: settingsScope.compact; onBackRequested: settingsScope.pagePane = false } }
     // AppsPage drills into its own Library sub-pages (All apps / app detail):
     // while drilled in, its in-page back row steps back; only at the overview

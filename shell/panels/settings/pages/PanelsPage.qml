@@ -18,7 +18,8 @@ NexusControls.PageBase {
     showTitle: root.panelId === ""
 
     readonly property var panels: [
-        {id: "taskbar", title: "Taskbar", icon: "󰍹", desc: "Position, modules, spacing"},
+        {id: "taskbar", title: "Taskbar", icon: "󰍹", desc: "Modules, spacing"},
+        {id: "dock", title: "Dock", icon: "󰓅", desc: "Pinned and running apps"},
         {id: "launcher", title: "Launcher", icon: "󰍉", desc: "App search, OS icon, panel size"},
         {id: "screenshot", title: "Screenshot UI", icon: "󰹑", desc: "Region, window, fullscreen capture"},
         {id: "notifications", title: "Notifications", icon: "󰂚", desc: "Toasts, Volume, Layout & Theme OSDs"}
@@ -110,6 +111,7 @@ NexusControls.PageBase {
         asynchronous: false
         sourceComponent: {
             if (root.panelId === "taskbar") return taskbarComp
+            if (root.panelId === "dock") return dockComp
             if (root.panelId === "launcher") return launcherComp
             if (root.panelId === "screenshot") return screenshotComp
             if (root.panelId === "notifications") return notificationsComp
@@ -120,6 +122,10 @@ NexusControls.PageBase {
     Component {
         id: taskbarComp
         TopBarPage { showTitle: false }
+    }
+    Component {
+        id: dockComp
+        DockPage { showTitle: false }
     }
     Component {
         id: launcherComp

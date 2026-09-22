@@ -34,7 +34,7 @@ Singleton {
     function sanitize(entry: var): var {
         // CRASH FIX: only plain JSON-safe types may enter history.
         // Storing notification.actions (list<NotificationAction QObjects>)
-        // or other Qt objects makes the CalendarPanel Repeaters segfault
+        // or other Qt objects makes the NotificationCenterPanel Repeaters segfault
         // in QV4::fromData/fromQVariantMap on open (all recent crashes
         // share that stack). Rebuild a sanitized snapshot here so no
         // caller can smuggle a QObject into `history`.

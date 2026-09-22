@@ -14,8 +14,9 @@ Scope {
     signal dismissed()
     // CC drill-in mode: the hero row is replaced by a back header (title,
     // status, power switch) and the card settles under the control-center
-    // anchor, so it morphs out of / back into the CC card (shell.qml
-    // bluetoothmenu panel). The standalone bar panel keeps the hero.
+    // anchor, growing out of / shrinking back into the clicked bluetooth
+    // tile via the container transform (shell.qml bluetoothmenu panel). The
+    // standalone bar panel keeps the hero.
     property bool showBack: false
     signal backRequested()
     property string panelModuleId: "bluetooth"
@@ -38,7 +39,6 @@ Scope {
             BluetoothService.setScanning(false)
         }
     }
-    readonly property string barPos: Theme.barPosition
     // Attached-bar morph: tuck under the bar edge (see Theme.panelAttachOverlap)
     // instead of floating detached below it.
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
@@ -389,7 +389,11 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "bluetoothpanel"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
             Item {
                 anchors.fill: parent
                 focus: true
@@ -417,11 +421,13 @@ Scope {
             PanelShell {
                 moduleId: scope.panelModuleId
                 anchorModuleId: scope.anchorModuleId
+                // Container transform: the tile replica glides into the
+                // drill-in header while the card grows out of the tile.
+                morphTarget: backHeader
                 // Drill-in mode settles below the CC header/tile row: the CC
                 // stays open and dimmed behind this card.
                 edgeInset: scope.showBack ? Theme.panelDrillInInset : 0
                 screenActive: Theme.isPrimaryScreen(modelData)
-                barPos: scope.barPos
                 panelGap: scope.panelGap
                 shown: scope.showBluetooth
                 boxWidth: scope.showBack ? 360 : 380
@@ -591,12 +597,16 @@ Scope {
                         }
                     }
                     Hairline { visible: scope.connectedDevs.length > 0 && (scope.pairedDevs.length > 0 || scope.availVisible); width: parent.width }
-                    Flickable {
+                    Item {
                         width: parent.width
-                        height: Math.min(listCol.implicitHeight, 400)
+                        implicitHeight: Math.min(listCol.implicitHeight, 400)
+                        Flickable {
+                            id: btFlick
+                            anchors.fill: parent
                         contentHeight: listCol.implicitHeight
                         clip: true
-                        boundsBehavior: Flickable.StopAtBounds
+                        boundsBehavior: Flickable.DragAndOvershootBounds
+                        boundsMovement: Flickable.FollowBoundsBehavior
                         Column {
                             id: listCol
                             width: parent.width
@@ -639,7 +649,10 @@ Scope {
                                 renderType: Theme.textRenderType
                             }
                         }
-            }
+                        }
+                        EdgeFade { flick: btFlick }
+                        OverscrollSpring { flick: btFlick }
+                    }
         }
     }
 }

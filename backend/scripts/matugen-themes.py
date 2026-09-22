@@ -236,6 +236,14 @@ def cmd_install(id: str) -> dict:
         if t.get(toggle, True) is False:
             t[toggle] = True
             atomic_write(THEMING_FILE, json.dumps(t, indent=4, sort_keys=True) + "\n")
+    install_hook = expand(entry.get("install_hook", ""))
+    hook_ran = False
+    if install_hook:
+        try:
+            subprocess.run(["bash", "-c", install_hook], capture_output=True, timeout=30)
+            hook_ran = True
+        except Exception:
+            pass
     return {
         "ok": True,
         "action": "installed",
@@ -243,6 +251,7 @@ def cmd_install(id: str) -> dict:
         "downloaded": downloaded,
         "skipped": skipped,
         "blocks": added,
+        "installHook": hook_ran,
         "manual": not any(b.get("id") and b.get("output") for b in entry.get("blocks", [])),
         "note": entry.get("note", ""),
     }

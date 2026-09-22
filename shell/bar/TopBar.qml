@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -11,13 +12,13 @@ import "../../style/themes"
 
 Scope {
     id: topBarScope
-    signal toggleCalendar()
+    signal toggleNotificationCenter()
     signal toggleSystemTray()
     signal toggleControlCenter()
     signal toggleLauncher()
     signal closePanel(string moduleId)
 
-    property bool calendarOpen: false
+    property bool notificationCenterOpen: false
     property bool trayOpen: false
     property bool controlCenterOpen: false
     property bool launcherOpen: false
@@ -32,7 +33,7 @@ Scope {
     // Modul -> Sichtbarkeitsflag (Tabelle statt if-Kette; neue Panels nur hier).
     function moduleActive(id: string): bool {
         const flag = {
-            clock: "calendarOpen",
+            clock: "notificationCenterOpen",
             systemtray: "trayOpen",
             controlcenter: "controlCenterOpen",
             launcher: "launcherOpen"
@@ -41,11 +42,6 @@ Scope {
     }
 
     IpcHandler {
-        target: "vitals"
-        function status(): string { return VitalsService.status() }
-        function refresh(): string { VitalsService.refresh(); return "refreshing " + VitalsService.status() }
-    }
-    IpcHandler {
         target: "updates"
         function check(): string { UpdateService.checkNow(); return "checking system+flatpak..." }
         function status(): string { return UpdateService.status() }
@@ -53,9 +49,10 @@ Scope {
         function debugCount(n: int): string { UpdateService.debugCount = n; UpdateService.debugForce = true; return "debugCount=" + n }
     }
 
-    // The bar always reserves its strip: Umbriel does not expose per-output
-    // fullscreen state through its CLI, and fullscreen windows cover the
-    // Top-layer bar anyway.
+    // The bar always reserves its strip; on outputs where a fullscreen window
+    // is visible it collapses to the hidden strip (fullscreenSuppressed in the
+    // window below) so it can never paint over the game, while the reserved
+    // zone is kept so exiting fullscreen does not shift tiled windows.
 
     IpcHandler {
         target: "bar"
@@ -83,9 +80,7 @@ Scope {
             screen: modelData
             readonly property int cfgThickness: Theme.barThickness
             property int barHeight: Math.max(20, Math.min(64, topBarWindow.cfgThickness))
-            property int barWidth: Math.max(20, Math.min(64, topBarWindow.cfgThickness))
-            onBarWidthChanged: Theme.barEffectiveWidth = barWidth
-            onBarHeightChanged: Theme.barEffectiveHeight = barHeight
+            onBarHeightChanged: { Theme.barEffectiveHeight = barHeight; Theme.barEffectiveWidth = barHeight }
             // PERF: 7 onChanged handlers called publishWindowRect() synchronously
             // per frame (geometry storm during resize/drag). Coalesce to one
             // deferred publish per event-loop tick.
@@ -100,16 +95,11 @@ Scope {
             }
             onWidthChanged: requestPublishWindowRect()
             onHeightChanged: requestPublishWindowRect()
-            onBarPosChanged: requestPublishWindowRect()
             onEdgeDistChanged: requestPublishWindowRect()
             onTopDistChanged: requestPublishWindowRect()
             // Monitor switch: the newly primary bar publishes its geometry so
             // popouts settle against the right screen immediately.
             onVisibleChanged: if (visible) requestPublishWindowRect()
-            property string barPos: Theme.barPosition
-            property real barOpacity: Theme.barOpacity
-            property bool isVertical: barPos === "left" || barPos === "right"
-            property bool isHorizontal: !isVertical
             property int edgeDist: Theme.barEdgeDistance
             property int topDist: Theme.barTopDistance
             // Auto-hide (Caelestia bar.persistent/showOnHover/dragThreshold):
@@ -118,15 +108,23 @@ Scope {
             // or on an edge drag past the threshold.
             readonly property bool autoHide: !Theme.barPersistent
             property bool barRevealed: false
+            // A fullscreen window on this output collapses the bar to the
+            // hidden strip: the compositor normally stacks the view above the
+            // Top layer, but some fullscreen paths leave it below (or in the
+            // tiled layer during transitions), where the bar would otherwise
+            // paint over the game. `revealed` still drives the exclusive zone,
+            // so the reserved strip is kept and tiled windows do not shift
+            // when fullscreen is exited.
+            readonly property bool fullscreenSuppressed: HyprlandService.isOutputFullscreen(modelData.name)
+            onFullscreenSuppressedChanged: if (fullscreenSuppressed) barRevealed = false
             readonly property bool revealed: !autoHide || barRevealed || topBarScope.anyPanelOpen
             readonly property int hiddenThickness: 2
             // 1 when fully expanded, 0 when collapsed: drives content opacity
             // so a hidden bar is completely invisible while its surface stays
             // mapped for hover/drag reveal.
             readonly property real revealProgress: {
-                const span = Math.max(1, (isVertical ? barWidth : barHeight) - hiddenThickness)
-                const extent = isVertical ? topBarWindow.width : topBarWindow.height
-                return Math.max(0, Math.min(1, (extent - hiddenThickness) / span))
+                const span = Math.max(1, barHeight - hiddenThickness)
+                return Math.max(0, Math.min(1, (topBarWindow.height - hiddenThickness) / span))
             }
             visible: Theme.isPrimaryScreen(modelData)
             WlrLayershell.namespace: "bar"
@@ -137,23 +135,22 @@ Scope {
             WlrLayershell.layer: WlrLayer.Top
             // Always reserve the strip so tiled windows don't slide under it
             // (auto-hidden bars reserve nothing).
-            exclusiveZone: Theme.isPrimaryScreen(modelData) ? (revealed ? (isVertical ? barWidth + topDist : barHeight + topDist) : 0) : 0
-            anchors { top: barPos === "top" || isVertical; bottom: barPos === "bottom" || isVertical; left: barPos === "left" || isHorizontal; right: barPos === "right" || isHorizontal }
+            exclusiveZone: Theme.isPrimaryScreen(modelData) ? (revealed ? barHeight + topDist : 0) : 0
+            anchors { top: true; bottom: false; left: true; right: true }
             margins {
-                top: topBarWindow.isVertical ? topBarWindow.edgeDist : (topBarWindow.barPos === "top" ? topBarWindow.topDist : 0)
-                bottom: topBarWindow.isVertical ? topBarWindow.edgeDist : (topBarWindow.barPos === "bottom" ? topBarWindow.topDist : 0)
-                left: topBarWindow.isVertical ? (topBarWindow.barPos === "left" ? topBarWindow.topDist : 0) : topBarWindow.edgeDist
-                right: topBarWindow.isVertical ? (topBarWindow.barPos === "right" ? topBarWindow.topDist : 0) : topBarWindow.edgeDist
+                top: topBarWindow.topDist
+                bottom: 0
+                left: topBarWindow.edgeDist
+                right: topBarWindow.edgeDist
             }
-            implicitHeight: isVertical ? 0 : (revealed ? barHeight : hiddenThickness)
-            implicitWidth: isVertical ? (revealed ? barWidth : hiddenThickness) : 0
+            implicitHeight: revealed && !fullscreenSuppressed ? barHeight : hiddenThickness
+            implicitWidth: 0
             Behavior on implicitHeight { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
-            Behavior on implicitWidth { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial } }
             color: "transparent"
 
             // Hover reveals (bar.showOnHover) and, once revealed, leaving hides.
             HoverHandler {
-                enabled: topBarWindow.autoHide
+                enabled: topBarWindow.autoHide && !topBarWindow.fullscreenSuppressed
                 onHoveredChanged: {
                     if (hovered) {
                         if (Theme.barShowOnHover) topBarWindow.barRevealed = true
@@ -165,27 +162,21 @@ Scope {
             // Edge drag reveals (bar.dragThreshold pixels toward the screen).
             MouseArea {
                 anchors.fill: parent
-                enabled: topBarWindow.autoHide && !topBarWindow.revealed
+                enabled: topBarWindow.autoHide && !topBarWindow.revealed && !topBarWindow.fullscreenSuppressed
                 acceptedButtons: Qt.LeftButton
-                property real pressX: 0
                 property real pressY: 0
                 onPressed: mouse => {
-                    pressX = mouse.x
                     pressY = mouse.y
                 }
                 onPositionChanged: mouse => {
-                    let d = 0
-                    if (topBarWindow.barPos === "top") d = mouse.y - pressY
-                    else if (topBarWindow.barPos === "bottom") d = pressY - mouse.y
-                    else if (topBarWindow.barPos === "left") d = mouse.x - pressX
-                    else d = pressX - mouse.x
+                    const d = mouse.y - pressY
                     if (d >= Math.max(1, Theme.barDragThreshold)) topBarWindow.barRevealed = true
                 }
             }
             // Scroll actions: top half volume, bottom half brightness.
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                enabled: topBarWindow.revealed
+                enabled: topBarWindow.revealed && !topBarWindow.fullscreenSuppressed
                 onWheel: event => {
                     let py = topBarWindow.height / 2 - 1
                     try { py = event.point.position.y } catch (e) { }
@@ -203,33 +194,60 @@ Scope {
                 }
             }
 
+            // Concave coves carved into the bar's underside where it meets
+            // the side screen edges — like the fillets joining panels to
+            // the bar. The bar stays full-bleed everywhere else; Display
+            // Radius sets the cove size (0 = plain square bar, always
+            // opaque). Floating bars keep the convex Appearance Rounding.
+            Shape {
+                id: barBgShape
+                anchors.fill: parent
+                opacity: topBarWindow.revealProgress
+                visible: topBarWindow.edgeDist <= 0 && topBarWindow.topDist <= 0
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    fillColor: Theme.panelWindowBg
+                    strokeWidth: 0
+                    strokeColor: "transparent"
+                    PathSvg { path: barBgShape.barPath() }
+                }
+                function barPath(): string {
+                    const W = barBgShape.width
+                    const H = barBgShape.height
+                    const d = Theme.barDisplayRadius
+                    const r = Math.max(0, Math.min(d, H, W / 2))
+                    const n = v => "" + (Math.round(v * 100) / 100)
+                    const w = n(W), h = n(H), rr = n(r)
+                    const wr = n(W - r), hr = n(H - r)
+                    if (r <= 0.01) return "M 0 0 H " + w + " V " + h + " H 0 Z"
+                    return "M 0 0 H " + w + " V " + hr + " A " + rr + " " + rr + " 0 0 0 " + wr + " " + h + " H " + rr + " A " + rr + " " + rr + " 0 0 0 0 " + hr + " Z"
+                }
+            }
+
             Rectangle {
                 antialiasing: Theme.shapesAa
                 anchors.fill: parent
                 opacity: topBarWindow.revealProgress
-                radius: (topBarWindow.edgeDist > 0 || topBarWindow.topDist > 0) ? Theme.cornerRadius : 0
-                color: topBarWindow.barOpacity >= 0.999 ? Theme.panelBg : Theme.withAlpha(Theme.bg, Math.max(0, Math.min(1, topBarWindow.barOpacity * Theme.panelBgAlpha)))
+                visible: topBarWindow.edgeDist > 0 || topBarWindow.topDist > 0
+                radius: Theme.cornerRadius
+                color: Theme.panelWindowBg
             }
 
-            Component.onCompleted: { Theme.barEffectiveWidth = barWidth; Theme.barEffectiveHeight = barHeight; publishWindowRect(); Qt.callLater(publishWindowRect) }
+            Component.onCompleted: { Theme.barEffectiveWidth = barHeight; Theme.barEffectiveHeight = barHeight; publishWindowRect(); Qt.callLater(publishWindowRect); HyprlandService.registerBarWindow(topBarWindow) }
+            Component.onDestruction: HyprlandService.unregisterBarWindow(topBarWindow)
 
             function publishWindowRect(): void {
                 if (!Theme.isPrimaryScreen(modelData)) return
+                // Suppressed bars are collapsed to the hidden strip; keep the
+                // last full-bar rect so panels still anchor to the right place.
+                if (fullscreenSuppressed) return
                 try {
-                    let sw = 0, sh = 0
-                    try { if (screen) { sw = screen.width; sh = screen.height } } catch (e1) { }
-                    if (!sw || !sh) { try { sw = Screen.width; sh = Screen.height } catch (e2) { } }
-                    let mL = 0, mT = 0, mR = 0, mB = 0
-                    try { let m = margins; if (m) { mL = m.left || 0; mT = m.top || 0; mR = m.right || 0; mB = m.bottom || 0 } } catch (e3) { }
-                    let rx = mL, ry = mT
-                    if (barPos === "bottom" && sh > 0) { rx = mL; ry = Math.max(0, sh - height - mB) }
-                    else if (barPos === "right" && sw > 0) { rx = Math.max(0, sw - width - mR); ry = mT }
-                    else if (barPos === "left") { rx = mL; ry = mT }
-                    Theme.setBarWindowRect(rx, ry, width, height)
+                    let mL = 0, mT = 0
+                    try { let m = margins; if (m) { mL = m.left || 0; mT = m.top || 0 } } catch (e3) { }
+                    Theme.setBarWindowRect(mL, mT, width, height)
                 } catch (e) { }
             }
             Item {
-                visible: topBarWindow.isHorizontal
                 anchors.fill: parent; anchors.leftMargin: Theme.barContentPadding; anchors.rightMargin: Theme.barContentPadding
                 opacity: topBarWindow.revealProgress
 
@@ -243,9 +261,7 @@ Scope {
                         anchors.centerIn: parent
                         spacing: Theme.barModuleSpacing
                         Repeater {
-                            // PERF: hidden orientation keeps zero delegates
-                            // (was 2x full bar trees alive, ~20 BarSlots).
-                            model: topBarWindow.isHorizontal ? Theme.barLayoutLeft : []
+                            model: Theme.barLayoutLeft
                                 Bar.BarSlot {
                                     required property var modelData
                                     required property int index
@@ -253,13 +269,10 @@ Scope {
                                     moduleId: modelData
                                     active: topBarScope.moduleActive(modelData)
                                     Layout.alignment: Qt.AlignVCenter
-                                    vertical: false
                                     monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
                                     barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isHorizontal
 
-                                    onRequestCalendar: topBarScope.toggleCalendar()
+                                    onRequestNotificationCenter: topBarScope.toggleNotificationCenter()
                                     onRequestSystemTray: topBarScope.toggleSystemTray()
                                     onRequestControlCenter: topBarScope.toggleControlCenter()
                                     onRequestLauncher: topBarScope.toggleLauncher()
@@ -282,7 +295,7 @@ Scope {
                         anchors.centerIn: parent
                         spacing: Theme.barModuleSpacing
                         Repeater {
-                            model: topBarWindow.isHorizontal ? Theme.barLayoutTwoFifths : []
+                            model: Theme.barLayoutTwoFifths
                                 Bar.BarSlot {
                                     required property var modelData
                                     required property int index
@@ -290,13 +303,10 @@ Scope {
                                     moduleId: modelData
                                     active: topBarScope.moduleActive(modelData)
                                     Layout.alignment: Qt.AlignVCenter
-                                    vertical: false
                                     monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
                                     barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isHorizontal
 
-                                    onRequestCalendar: topBarScope.toggleCalendar()
+                                    onRequestNotificationCenter: topBarScope.toggleNotificationCenter()
                                     onRequestSystemTray: topBarScope.toggleSystemTray()
                                     onRequestControlCenter: topBarScope.toggleControlCenter()
                                     onRequestLauncher: topBarScope.toggleLauncher()
@@ -317,7 +327,7 @@ Scope {
                         anchors.centerIn: parent
                         spacing: Theme.barModuleSpacing
                         Repeater {
-                            model: topBarWindow.isHorizontal ? Theme.barLayoutCenter : []
+                            model: Theme.barLayoutCenter
                                 Bar.BarSlot {
                                     required property var modelData
                                     required property int index
@@ -325,13 +335,10 @@ Scope {
                                     moduleId: modelData
                                     active: topBarScope.moduleActive(modelData)
                                     Layout.alignment: Qt.AlignVCenter
-                                    vertical: false
                                     monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
                                     barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isHorizontal
 
-                                    onRequestCalendar: topBarScope.toggleCalendar()
+                                    onRequestNotificationCenter: topBarScope.toggleNotificationCenter()
                                     onRequestSystemTray: topBarScope.toggleSystemTray()
                                     onRequestControlCenter: topBarScope.toggleControlCenter()
                                     onRequestLauncher: topBarScope.toggleLauncher()
@@ -354,7 +361,7 @@ Scope {
                         anchors.centerIn: parent
                         spacing: Theme.barModuleSpacing
                         Repeater {
-                            model: topBarWindow.isHorizontal ? Theme.barLayoutFourFifths : []
+                            model: Theme.barLayoutFourFifths
                                 Bar.BarSlot {
                                     required property var modelData
                                     required property int index
@@ -362,13 +369,10 @@ Scope {
                                     moduleId: modelData
                                     active: topBarScope.moduleActive(modelData)
                                     Layout.alignment: Qt.AlignVCenter
-                                    vertical: false
                                     monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
                                     barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isHorizontal
 
-                                    onRequestCalendar: topBarScope.toggleCalendar()
+                                    onRequestNotificationCenter: topBarScope.toggleNotificationCenter()
                                     onRequestSystemTray: topBarScope.toggleSystemTray()
                                     onRequestControlCenter: topBarScope.toggleControlCenter()
                                     onRequestLauncher: topBarScope.toggleLauncher()
@@ -389,7 +393,7 @@ Scope {
                         anchors.centerIn: parent
                         spacing: Theme.barModuleSpacing
                         Repeater {
-                            model: topBarWindow.isHorizontal ? Theme.barLayoutRight : []
+                            model: Theme.barLayoutRight
                                 Bar.BarSlot {
                                     required property var modelData
                                     required property int index
@@ -397,13 +401,10 @@ Scope {
                                     moduleId: modelData
                                     active: topBarScope.moduleActive(modelData)
                                     Layout.alignment: Qt.AlignVCenter
-                                    vertical: false
                                     monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
                                     barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isHorizontal
 
-                                    onRequestCalendar: topBarScope.toggleCalendar()
+                                    onRequestNotificationCenter: topBarScope.toggleNotificationCenter()
                                     onRequestSystemTray: topBarScope.toggleSystemTray()
                                     onRequestControlCenter: topBarScope.toggleControlCenter()
                                     onRequestLauncher: topBarScope.toggleLauncher()
@@ -411,196 +412,6 @@ Scope {
                                 }
                         }
 
-                    }
-                }
-            }
-
-            Item {
-                visible: topBarWindow.isVertical
-                anchors.fill: parent; anchors.topMargin: Theme.barContentPadding; anchors.bottomMargin: Theme.barContentPadding; anchors.leftMargin: 4; anchors.rightMargin: 4
-                clip: true
-                opacity: topBarWindow.revealProgress
-
-                ColumnLayout {
-                    id: vCol; anchors.fill: parent; spacing: 10
-                    Item {
-                        id: vTopWrap
-                        Layout.fillWidth: true
-                        implicitHeight: vTopCol.implicitHeight + (Theme.barContentPadding > 0 ? 14 : 0)
-                        ColumnLayout {
-                            id: vTopCol
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.barModuleSpacing
-                            Repeater {
-                                model: topBarWindow.isVertical ? Theme.barLayoutLeft : []
-                                Bar.BarSlot {
-                                    required property var modelData
-                                    required property int index
-                                    mergeState: topBarScope.mergeState
-                                    Layout.fillWidth: true
-                                    moduleId: modelData
-                                    active: topBarScope.moduleActive(modelData)
-                                    vertical: true
-                                    monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
-                                    barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isVertical
-
-                                    onRequestCalendar: topBarScope.toggleCalendar()
-                                    onRequestSystemTray: topBarScope.toggleSystemTray()
-                                    onRequestControlCenter: topBarScope.toggleControlCenter()
-                                    onRequestLauncher: topBarScope.toggleLauncher()
-                                    onHideRequest: topBarScope.closePanel(modelData)
-                                }
-                            }
-
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
-                    Item {
-                        id: vTwoFifthsWrap
-                        Layout.fillWidth: true
-                        implicitHeight: vTwoFifthsCol.implicitHeight + (Theme.barContentPadding > 0 ? 14 : 0)
-                        ColumnLayout {
-                            id: vTwoFifthsCol
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.barModuleSpacing
-                            Repeater {
-                                model: topBarWindow.isVertical ? Theme.barLayoutTwoFifths : []
-                                Bar.BarSlot {
-                                    required property var modelData
-                                    required property int index
-                                    mergeState: topBarScope.mergeState
-                                    Layout.fillWidth: true
-                                    moduleId: modelData
-                                    active: topBarScope.moduleActive(modelData)
-                                    vertical: true
-                                    monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
-                                    barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isVertical
-
-                                    onRequestCalendar: topBarScope.toggleCalendar()
-                                    onRequestSystemTray: topBarScope.toggleSystemTray()
-                                    onRequestControlCenter: topBarScope.toggleControlCenter()
-                                    onRequestLauncher: topBarScope.toggleLauncher()
-                                    onHideRequest: topBarScope.closePanel(modelData)
-                                }
-                            }
-
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
-                    Item {
-                        id: vMidWrap
-                        Layout.fillWidth: true
-                        implicitHeight: vMidCol.implicitHeight + (Theme.barContentPadding > 0 ? 14 : 0)
-                        ColumnLayout {
-                            id: vMidCol
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.barModuleSpacing
-                            Repeater {
-                                model: topBarWindow.isVertical ? Theme.barLayoutCenter : []
-                                Bar.BarSlot {
-                                    required property var modelData
-                                    required property int index
-                                    mergeState: topBarScope.mergeState
-                                    Layout.fillWidth: true
-                                    moduleId: modelData
-                                    active: topBarScope.moduleActive(modelData)
-                                    vertical: true
-                                    monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
-                                    barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isVertical
-
-                                    onRequestCalendar: topBarScope.toggleCalendar()
-                                    onRequestSystemTray: topBarScope.toggleSystemTray()
-                                    onRequestControlCenter: topBarScope.toggleControlCenter()
-                                    onRequestLauncher: topBarScope.toggleLauncher()
-                                    onHideRequest: topBarScope.closePanel(modelData)
-                                }
-                            }
-
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
-                    Item {
-                        id: vFourFifthsWrap
-                        Layout.fillWidth: true
-                        implicitHeight: vFourFifthsCol.implicitHeight + (Theme.barContentPadding > 0 ? 14 : 0)
-                        ColumnLayout {
-                            id: vFourFifthsCol
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.barModuleSpacing
-                            Repeater {
-                                model: topBarWindow.isVertical ? Theme.barLayoutFourFifths : []
-                                Bar.BarSlot {
-                                    required property var modelData
-                                    required property int index
-                                    mergeState: topBarScope.mergeState
-                                    Layout.fillWidth: true
-                                    moduleId: modelData
-                                    active: topBarScope.moduleActive(modelData)
-                                    vertical: true
-                                    monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
-                                    barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isVertical
-
-                                    onRequestCalendar: topBarScope.toggleCalendar()
-                                    onRequestSystemTray: topBarScope.toggleSystemTray()
-                                    onRequestControlCenter: topBarScope.toggleControlCenter()
-                                    onRequestLauncher: topBarScope.toggleLauncher()
-                                    onHideRequest: topBarScope.closePanel(modelData)
-                                }
-                            }
-
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
-                    Item {
-                        id: vBottomWrap
-                        Layout.fillWidth: true
-                        implicitHeight: vBottomCol.implicitHeight + (Theme.barContentPadding > 0 ? 14 : 0)
-                        ColumnLayout {
-                            id: vBottomCol
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.barModuleSpacing
-                            Repeater {
-                                model: topBarWindow.isVertical ? Theme.barLayoutRight : []
-                                Bar.BarSlot {
-                                    required property var modelData
-                                    required property int index
-                                    mergeState: topBarScope.mergeState
-                                    Layout.fillWidth: true
-                                    moduleId: modelData
-                                    active: topBarScope.moduleActive(modelData)
-                                    vertical: true
-                                    monitor: topBarWindow.modelData
-                                    barPos: topBarWindow.barPos
-                                    barWindow: topBarWindow
-                                    anchorActive: topBarWindow.isVertical
-
-                                    onRequestCalendar: topBarScope.toggleCalendar()
-                                    onRequestSystemTray: topBarScope.toggleSystemTray()
-                                    onRequestControlCenter: topBarScope.toggleControlCenter()
-                                    onRequestLauncher: topBarScope.toggleLauncher()
-                                    onHideRequest: topBarScope.closePanel(modelData)
-                                }
-                            }
-
-                        }
                     }
                 }
             }

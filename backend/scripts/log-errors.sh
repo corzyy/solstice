@@ -89,7 +89,11 @@ SEEN_MARKER=0
 [ -z "$MARKER" ] && SEEN_MARKER=1
 
 while IFS= read -r line <&"${LOGTAIL[0]}"; do
-    clean="$(printf '%s' "$line" | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+    # Strip ANSI formatting and control bytes (NUL, C0 except tab/CR/LF, DEL).
+    # Quickshell's log reader emits raw binary payloads when it tails a log
+    # file that is being appended to; without the filter errors.log got
+    # corrupted with binary data. High bytes (UTF-8 text) are preserved.
+    clean="$(printf '%s' "$line" | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' | tr -d '\000-\010\013\014\016-\037\177')"
 
     if [ "$SEEN_MARKER" -eq 0 ]; then
         case "$clean" in
@@ -97,6 +101,13 @@ while IFS= read -r line <&"${LOGTAIL[0]}"; do
         esac
         continue
     fi
+
+    # Reader noise, not a shell error: `quickshell log -f` occasionally fails
+    # to decode the tail of its own binary log ("[READER] ERROR: An error
+    # occurred parsing the end of this log file" + raw data). Never persist.
+    case "$clean" in
+        *"[READER]"*) continue ;;
+    esac
 
     case "$clean" in
         *ERROR*|*WARN*|*CRITICAL*|*FATAL*)

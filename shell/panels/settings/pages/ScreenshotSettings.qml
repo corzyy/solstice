@@ -69,8 +69,9 @@ NexusControls.PageBase {
     }
 
     NexusControls.Note {
-        text: "PRINT toggles the pill. Region drags a slurp selection, "
-            + "Window captures the last focused window, Fullscreen grabs "
-            + "every display. A cancelled region selection reopens the pill."
+        text: "PRINT toggles the pill. Region opens pre-armed: drag on the "
+            + "dimmed overlay to select (pill stays usable), release to capture. "
+            + "Window grabs the focused window by geometry, Fullscreen grabs "
+            + "every display."
     }
 }

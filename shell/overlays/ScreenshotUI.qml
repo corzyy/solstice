@@ -2,12 +2,13 @@
 // screenshots. There is no separate shutter button: picking a mode runs the
 // capture on the selection gesture itself.
 //
-//   Region      pill unmaps, slurp draws the selection; releasing the drag
-//               captures the region (Esc in slurp cancels and reopens the
-//               pill).
-//   Window      pill unmaps, a full-screen picker dims the desktop and
-//               highlights the window under the pointer; releasing the mouse
-//               over a window captures it (Esc/right click cancels).
+//   Region      native QML selector: dim + crosshair on every output, drag
+//               to select — the pill stays mapped and usable (mode switch,
+//               close) while selecting; releasing the drag captures the
+//               region via `grim -g` (Esc/right-click cancels the drag).
+//   Window      pill unmaps and the focused window is grabbed by geometry
+//               (`hyprctl activewindow` + `grim -g`; Esc before the grab
+//               reopens the pill).
 //   Fullscreen  pill unmaps and the whole desktop is grabbed.
 //
 // Opened by the PRINT keybind (`solstice module screenshot toggle`), dismissed
@@ -55,7 +56,11 @@ Scope {
     function setMode(id: string): void {
         for (let i = 0; i < scope.modes.length; i++) {
             if (scope.modes[i].id === id) {
-                scope.mode = id
+                if (scope.mode !== id) {
+                    scope.mode = id
+                    // Switching modes aborts any in-progress drag rect.
+                    scope.clearSelection()
+                }
                 return
             }
         }
@@ -65,16 +70,45 @@ Scope {
         scope.mode = scope.modes[((scope.modeIndex + dir) % n + n) % n].id
     }
     // Segment click: select the mode and start its capture right away.
+    // Region is armed by the selection overlay itself, so activating it
+    // just (re-)arms the selector instead of capturing.
     function activateMode(id: string): void {
         scope.setMode(id)
         scope.capture()
     }
 
+    // ---- region selection (native, pill stays live) ----
+    // `selecting` is true while the drag overlays are mapped. The pill
+    // stays visible during it (pillVisible does not exclude selecting);
+    // only the final grim grab hides everything via `capturing`.
+    readonly property bool selecting: scope.showScreenshot && scope.mode === "region" && !scope.capturing
+    // Geometry produced by the overlay drag, in grim layout coordinates
+    // ("x,y WxH"), plus the output it was drawn on for `grim -o`.
+    property string pendingRegionGeo: ""
+    property string pendingRegionOutput: ""
+    // Bumped to reset every per-screen drag rect (open / mode switch).
+    property int selectionEpoch: 0
+    // True while any output has a drag in progress (set by the overlay).
+    property bool anyDragging: false
+    function clearSelection(): void {
+        scope.pendingRegionGeo = ""
+        scope.pendingRegionOutput = ""
+        scope.selectionEpoch++
+    }
+    // Called by the selection overlay on mouse release: hide everything
+    // first (clean frame for grim), then grab after `captureDelay`.
+    function finishRegionSelection(geo: string, outputName: string): void {
+        if (!scope.selecting || scope.capturing) return
+        if (geo === "") return
+        scope.pendingRegionGeo = geo
+        scope.pendingRegionOutput = outputName
+        scope.capturing = true
+        captureTimer.restart()
+    }
+
     // ---- visibility ----
     property bool capturing: false
-    // Window mode's picker surface (see the second Variants below).
-    property bool pickingWindow: false
-    readonly property bool pillVisible: scope.showScreenshot && !scope.capturing && !scope.pickingWindow
+    readonly property bool pillVisible: scope.showScreenshot && !scope.capturing
     property bool _winVisible: scope.pillVisible
     Timer {
         id: hideTimer
@@ -87,22 +121,15 @@ Scope {
             scope._winVisible = true
             hideTimer.stop()
             scope.revealEnter()
-        } else if (!scope.capturing && !scope.pickingWindow) {
+        } else if (!scope.capturing) {
             hideTimer.restart()
             scope.revealExit()
         }
     }
-    // Capture and picking remove the pill surface immediately (no fade
-    // linger): the compositor needs a clean frame before grim grabs it and
-    // the picker must not sit under a ghost pill.
+    // Capture removes the pill surface immediately (no fade
+    // linger): the compositor needs a clean frame before grim grabs it.
     onCapturingChanged: {
         if (scope.capturing) {
-            hideTimer.stop()
-            scope._winVisible = false
-        }
-    }
-    onPickingWindowChanged: {
-        if (scope.pickingWindow) {
             hideTimer.stop()
             scope._winVisible = false
         }
@@ -110,12 +137,17 @@ Scope {
     onShowScreenshotChanged: {
         if (scope.showScreenshot) {
             // Every open starts on the configured default mode (Settings >
-            // Panels > Screenshot UI).
+            // Panels > Screenshot UI). Region opens pre-armed: the
+            // selection overlay maps immediately, the pill stays usable.
             scope.mode = Theme.screenshotDefaultMode
+            scope.pendingRegionGeo = ""
+            scope.pendingRegionOutput = ""
+            scope.selectionEpoch++
         } else {
             scope.capturing = false
-            scope.pickingWindow = false
-            scope.hoveredGeometry = null
+            scope.pendingRegionGeo = ""
+            scope.pendingRegionOutput = ""
+            scope.selectionEpoch++
             captureTimer.stop()
             // Hidden via capture (no exit run played): reset so the next
             // open animates from the hidden pose again.
@@ -171,14 +203,18 @@ Scope {
     // The unmap has to reach the compositor before grim grabs the frame;
     // give it a beat to repaint.
     readonly property int captureDelay: Math.max(150, Theme.durFastEffects + 80)
-    property string pickedGeometry: ""
 
     function capture(): void {
-        if (scope.capturing || scope.pickingWindow || !scope.showScreenshot) return
-        if (scope.mode === "window") {
-            scope.beginWindowPick()
+        if (scope.capturing || !scope.showScreenshot) return
+        if (scope.mode === "region") {
+            // Region is driven by the selection-overlay drag (which calls
+            // finishRegionSelection on release). Enter/Space with no drag
+            // just re-arms the selector.
+            scope.clearSelection()
             return
         }
+        // Window grabs the focused window by geometry, fullscreen the whole
+        // desktop: both unmap the pill first and grab after `captureDelay`.
         scope.capturing = true
         captureTimer.restart()
     }
@@ -190,8 +226,19 @@ Scope {
     }
     function runCapture(): void {
         if (captureProc.running) return
-        const geo = scope.mode === "window" ? scope.pickedGeometry : ""
-        captureProc.command = ["bash", Quickshell.shellDir + "/backend/scripts/screenshot.sh", scope.mode, geo]
+        if (scope.mode === "window") {
+            captureProc.command = ["bash", Quickshell.shellDir + "/backend/scripts/screenshot.sh", "window", ""]
+        } else if (scope.mode === "region") {
+            // Drag released without a valid rect (or IPC capture with no
+            // selection): stay open instead of grabbing the desktop.
+            if (scope.pendingRegionGeo === "") {
+                scope.capturing = false
+                return
+            }
+            captureProc.command = ["bash", Quickshell.shellDir + "/backend/scripts/screenshot.sh", "region-geom", scope.pendingRegionGeo, scope.pendingRegionOutput]
+        } else {
+            captureProc.command = ["bash", Quickshell.shellDir + "/backend/scripts/screenshot.sh", "fullscreen", ""]
+        }
         captureProc.running = true
     }
     Process {
@@ -205,43 +252,16 @@ Scope {
             SOLSTICE_SHOT_NOTIFY: Theme.screenshotNotify ? "1" : "0"
         })
         onExited: (code, status) => {
-            // slurp cancelled (Escape / empty selection): bring the pill
-            // back so another mode can be picked instead of dropping the
-            // tool.
+            // Region grab failed (bad geometry / grim error): stay open so
+            // another rect can be drawn instead of dropping the tool.
             if (code !== 0 && scope.mode === "region") {
+                scope.pendingRegionGeo = ""
+                scope.pendingRegionOutput = ""
                 scope.capturing = false
                 return
             }
             scope.dismissed()
         }
-    }
-
-    // ---- window picker ----
-    // Hovered toplevel from UmbrielService, {id,x,y,w,h,appId,title} or null.
-    property var hoveredGeometry: null
-
-    function beginWindowPick(): void {
-        if (!scope.showScreenshot || scope.capturing) return
-        scope.pickedGeometry = ""
-        scope.hoveredGeometry = null
-        scope.pickingWindow = true
-    }
-    function cancelWindowPick(): void {
-        scope.pickingWindow = false
-        scope.hoveredGeometry = null
-    }
-    function updateHover(screenObj: var, lx: real, ly: real): void {
-        if (!screenObj) return
-        scope.hoveredGeometry = UmbrielService.windowGeometryAt(lx + screenObj.x, ly + screenObj.y)
-    }
-    function pickWindow(win: var): void {
-        if (!win) return
-        scope.pickedGeometry = Math.round(win.x) + "," + Math.round(win.y) + " "
-            + Math.round(win.w) + "x" + Math.round(win.h)
-        scope.pickingWindow = false
-        scope.hoveredGeometry = null
-        scope.capturing = true
-        captureTimer.restart()
     }
 
     IpcHandler {
@@ -250,24 +270,206 @@ Scope {
             scope.setMode(m)
             return "mode=" + scope.mode
         }
-        // Runs the current mode: region/fullscreen capture, window picker.
+        // Runs the current mode: window/fullscreen capture.
+        // Region is drag-driven; capture() just re-arms the selector.
         function capture(): void { scope.capture() }
-        // Capture the window at a compositor-layout point (script/debug
-        // entry point for what the picker does on release).
-        function pickAt(x: real, y: real): string {
-            const w = UmbrielService.windowGeometryAt(x, y)
-            if (!w) return "none"
-            scope.pickWindow(w)
-            return "picked=" + w.id
-        }
         function status(): string {
             return "visible=" + scope.showScreenshot + " mode=" + scope.mode
-                + " capturing=" + scope.capturing + " picking=" + scope.pickingWindow
+                + " capturing=" + scope.capturing
+                + " selecting=" + scope.selecting
         }
     }
 
-    // Pill sits above a bottom bar when one is configured.
-    readonly property int bottomMargin: 44 + (Theme.barPosition === "bottom" ? Theme.barThickness : 0)
+    // Pill sits centered at the bottom of the screen.
+    readonly property int bottomMargin: 44
+
+    // ---- region selection overlay ----
+    // Native drag surfaces, one per output on Top (below the Overlay pill,
+    // which keeps its Exclusive keyboard focus + clicks). No slurp: the
+    // pill stays mapped and usable while selecting; both surfaces unmap
+    // only for the final grim grab via `capturing`.
+    // NOTE: a drag cannot span outputs — release on the output where the
+    // press started. Geometry is converted to grim layout coordinates via
+    // screen.x/screen.y.
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: selWin
+            required property var modelData
+            screen: modelData
+            visible: scope.selecting
+            color: "transparent"
+            exclusiveZone: 0
+            WlrLayershell.exclusionMode: ExclusionMode.Ignore
+            anchors { top: true; left: true; right: true; bottom: true }
+            WlrLayershell.layer: WlrLayer.Top
+            WlrLayershell.namespace: "screenshot-selector"
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+            // Local drag state (window-local logical pixels).
+            property real pressX: 0
+            property real pressY: 0
+            property real curX: 0
+            property real curY: 0
+            property bool dragging: false
+            readonly property real selX: Math.min(selWin.pressX, selWin.curX)
+            readonly property real selY: Math.min(selWin.pressY, selWin.curY)
+            readonly property real selW: Math.abs(selWin.curX - selWin.pressX)
+            readonly property real selH: Math.abs(selWin.curY - selWin.pressY)
+            readonly property bool hasSel: selWin.dragging && selWin.selW >= 4 && selWin.selH >= 4
+
+            // Epoch bump (open / mode switch / Esc) aborts any drag.
+            property int epoch: scope.selectionEpoch
+            onEpochChanged: {
+                if (selWin.dragging) {
+                    selWin.dragging = false
+                    scope.anyDragging = false
+                }
+            }
+
+            function abortDrag(): void {
+                if (selWin.dragging) {
+                    selWin.dragging = false
+                    scope.anyDragging = false
+                }
+            }
+
+            MouseArea {
+                id: selMouse
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                hoverEnabled: true
+                cursorShape: Qt.CrossCursor
+                onPressed: mouse => {
+                    if (mouse.button === Qt.RightButton) {
+                        selWin.abortDrag()
+                        return
+                    }
+                    selWin.pressX = mouse.x
+                    selWin.pressY = mouse.y
+                    selWin.curX = mouse.x
+                    selWin.curY = mouse.y
+                    selWin.dragging = true
+                    scope.anyDragging = true
+                }
+                onPositionChanged: mouse => {
+                    if (selWin.dragging) {
+                        selWin.curX = mouse.x
+                        selWin.curY = mouse.y
+                    }
+                }
+                onReleased: mouse => {
+                    if (mouse.button === Qt.RightButton || !selWin.dragging) return
+                    selWin.curX = mouse.x
+                    selWin.curY = mouse.y
+                    const wasValid = selWin.hasSel
+                    const gx = Math.round(selWin.modelData.x + selWin.selX)
+                    const gy = Math.round(selWin.modelData.y + selWin.selY)
+                    const gw = Math.round(selWin.selW)
+                    const gh = Math.round(selWin.selH)
+                    selWin.dragging = false
+                    scope.anyDragging = false
+                    // Click without drag: stay armed. Valid drag: capture.
+                    if (wasValid && gw >= 4 && gh >= 4) {
+                        scope.finishRegionSelection(gx + "," + gy + " " + gw + "x" + gh, "" + selWin.modelData.name)
+                    }
+                }
+                onCanceled: selWin.abortDrag()
+            }
+
+            // Full dim when idle; cut into 4 bands around the rect while
+            // dragging so the selection shows undimmed.
+            Rectangle {
+                anchors.fill: parent
+                color: "black"
+                opacity: 0.45
+                visible: !selWin.hasSel
+            }
+            Rectangle { // top band
+                x: 0; y: 0; width: parent.width; height: selWin.selY
+                color: "black"; opacity: 0.45; visible: selWin.hasSel
+            }
+            Rectangle { // bottom band
+                x: 0; y: selWin.selY + selWin.selH; width: parent.width; height: parent.height - (selWin.selY + selWin.selH)
+                color: "black"; opacity: 0.45; visible: selWin.hasSel
+            }
+            Rectangle { // left band
+                x: 0; y: selWin.selY; width: selWin.selX; height: selWin.selH
+                color: "black"; opacity: 0.45; visible: selWin.hasSel
+            }
+            Rectangle { // right band
+                x: selWin.selX + selWin.selW; y: selWin.selY
+                width: parent.width - (selWin.selX + selWin.selW); height: selWin.selH
+                color: "black"; opacity: 0.45; visible: selWin.hasSel
+            }
+
+            // Selection frame + corner handles + size badge.
+            Rectangle {
+                x: selWin.selX; y: selWin.selY; width: selWin.selW; height: selWin.selH
+                color: "transparent"
+                border.color: Theme.accent
+                border.width: 2
+                visible: selWin.hasSel
+            }
+            Repeater {
+                model: selWin.hasSel ? 4 : 0
+                delegate: Rectangle {
+                    required property int index
+                    readonly property real hs: 8
+                    x: selWin.selX - hs / 2 + [0, selWin.selW, 0, selWin.selW][index]
+                    y: selWin.selY - hs / 2 + [0, 0, selWin.selH, selWin.selH][index]
+                    width: hs; height: hs; radius: 2
+                    color: Theme.accent
+                }
+            }
+            Rectangle {
+                id: sizeBadge
+                visible: selWin.hasSel
+                x: Math.min(Math.max(selWin.selX, 8), parent.width - width - 8)
+                y: (selWin.selY + selWin.selH + 8 + height <= parent.height) ? (selWin.selY + selWin.selH + 8) : Math.max(selWin.selY - height - 8, 8)
+                width: sizeLabel.implicitWidth + 16
+                height: 26
+                radius: 13
+                color: Theme.panelWindowBg
+                border.color: Theme.panelBorderColor
+                border.width: 1
+                Text {
+                    id: sizeLabel
+                    anchors.centerIn: parent
+                    text: Math.round(selWin.selW) + " × " + Math.round(selWin.selH)
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fs(12)
+                    font.weight: Font.Medium
+                }
+            }
+
+            // Idle hint (primary screen only to avoid repetition).
+            Rectangle {
+                visible: !selWin.dragging && Theme.isPrimaryScreen(selWin.modelData)
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.topMargin: 48
+                width: hintLabel.implicitWidth + 28
+                height: 36
+                radius: 18
+                color: Theme.panelWindowBg
+                border.color: Theme.panelBorderColor
+                border.width: 1
+                opacity: 0.95
+                Text {
+                    id: hintLabel
+                    anchors.centerIn: parent
+                    text: "Drag to select  •  Right-click / Esc cancels"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fs(12)
+                    font.weight: Font.Medium
+                }
+            }
+        }
+    }
 
     // ---- the pill ----
     Variants {
@@ -309,7 +511,9 @@ Scope {
                 Keys.onPressed: event => {
                     switch (event.key) {
                     case Qt.Key_Escape:
-                        scope.dismissed()
+                        // Mid-drag Esc aborts the rect, otherwise dismiss.
+                        if (scope.selecting && scope.anyDragging) scope.clearSelection()
+                        else scope.dismissed()
                         event.accepted = true
                         break
                     case Qt.Key_Return:
@@ -495,218 +699,6 @@ Scope {
                                 onClicked: scope.dismissed()
                             }
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    // ---- window picker surface (all screens) ----
-    Variants {
-        model: Quickshell.screens
-
-        PanelWindow {
-            id: pickWin
-            required property var modelData
-            screen: modelData
-            visible: scope.showScreenshot && scope.pickingWindow
-            color: "transparent"
-            exclusiveZone: 0
-            // Cover the whole screen including the bar's exclusive zone:
-            // the bar itself stays visible through the scrim's hole (and
-            // the program indicator stacks above it).
-            WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            anchors { top: true; left: true; right: true; bottom: true }
-            WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.namespace: "screenshotpicker"
-            // Only the primary screen owns the keyboard (Esc); the others
-            // are pointer-only dim surfaces.
-            WlrLayershell.keyboardFocus: Theme.isPrimaryScreen(modelData) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-
-            // Hovered window in this screen's local coordinates.
-            readonly property var hovered: scope.hoveredGeometry
-            readonly property real hx: hovered ? hovered.x - modelData.x : 0
-            readonly property real hy: hovered ? hovered.y - modelData.y : 0
-            readonly property real hw: hovered ? hovered.w : 0
-            readonly property real hh: hovered ? hovered.h : 0
-            // The hovered window lives on exactly one screen; only that
-            // delegate draws the program indicator (the hole math is
-            // harmless on the others, the label would not be).
-            readonly property bool ownsHover: {
-                if (!hovered) return false
-                const cx = hovered.x + hovered.w / 2
-                const cy = hovered.y + hovered.h / 2
-                return cx >= modelData.x && cx < modelData.x + modelData.width
-                    && cy >= modelData.y && cy < modelData.y + modelData.height
-            }
-
-
-            Item {
-                id: pickRoot
-                anchors.fill: parent
-                focus: true
-                Keys.onPressed: event => {
-                    if (event.key === Qt.Key_Escape) {
-                        scope.cancelWindowPick()
-                        event.accepted = true
-                    }
-                }
-                Component.onCompleted: if (scope.pickingWindow) forceActiveFocus()
-                Connections {
-                    target: scope
-                    function onPickingWindowChanged() {
-                        if (scope.pickingWindow) Qt.callLater(() => pickRoot.forceActiveFocus())
-                    }
-                }
-
-                // Dim everything except the hovered window and the top bar:
-                // two holes in an odd-even filled screen rect. Keeping the
-                // bar out of the scrim is what stops it from reading as
-                // "gone" while picking.
-                Shape {
-                    id: dimShape
-                    anchors.fill: parent
-                    preferredRendererType: Shape.CurveRenderer
-
-                    readonly property rect barHole: {
-                        if (!Theme.barPersistent) return Qt.rect(0, 0, 0, 0)
-                        if (!Theme.isPrimaryScreen(pickWin.modelData)) return Qt.rect(0, 0, 0, 0)
-                        const r = Theme.barWindowRect
-                        if (!r || r.w <= 0 || r.h <= 0) return Qt.rect(0, 0, 0, 0)
-                        return Qt.rect(r.x, r.y, r.w, r.h)
-                    }
-                    readonly property rect winHole: (pickWin.hw > 0 && pickWin.hh > 0)
-                        ? Qt.rect(pickWin.hx, pickWin.hy, pickWin.hw, pickWin.hh)
-                        : Qt.rect(0, 0, 0, 0)
-
-                    ShapePath {
-                        strokeWidth: 0
-                        strokeColor: "transparent"
-                        fillColor: Theme.withAlpha(Theme.scrim, 0.35)
-                        fillRule: ShapePath.OddEvenFill
-                        // Outer: the whole screen.
-                        startX: 0
-                        startY: 0
-                        PathLine { x: dimShape.width; y: 0 }
-                        PathLine { x: dimShape.width; y: dimShape.height }
-                        PathLine { x: 0; y: dimShape.height }
-                        PathLine { x: 0; y: 0 }
-                        // Hole: top bar (counter-clockwise so the hole also
-                        // works under WindingFill).
-                        PathMove { x: dimShape.barHole.x; y: dimShape.barHole.y }
-                        PathLine { x: dimShape.barHole.x; y: dimShape.barHole.y + dimShape.barHole.height }
-                        PathLine { x: dimShape.barHole.x + dimShape.barHole.width; y: dimShape.barHole.y + dimShape.barHole.height }
-                        PathLine { x: dimShape.barHole.x + dimShape.barHole.width; y: dimShape.barHole.y }
-                        PathLine { x: dimShape.barHole.x; y: dimShape.barHole.y }
-                        // Hole: hovered window.
-                        PathMove { x: dimShape.winHole.x; y: dimShape.winHole.y }
-                        PathLine { x: dimShape.winHole.x; y: dimShape.winHole.y + dimShape.winHole.height }
-                        PathLine { x: dimShape.winHole.x + dimShape.winHole.width; y: dimShape.winHole.y + dimShape.winHole.height }
-                        PathLine { x: dimShape.winHole.x + dimShape.winHole.width; y: dimShape.winHole.y }
-                        PathLine { x: dimShape.winHole.x; y: dimShape.winHole.y }
-                    }
-                }
-                Rectangle {
-                    visible: pickWin.hw > 0 && pickWin.hh > 0
-                    x: pickWin.hx
-                    y: pickWin.hy
-                    width: pickWin.hw
-                    height: pickWin.hh
-                    color: "transparent"
-                    border.color: Theme.accent
-                    border.width: 2
-                    radius: Theme.cornerRadiusSmall
-                    antialiasing: Theme.shapesAa
-                }
-
-                // Hovered program indicator: a pill centred over the top bar
-                // (the top edge on screens without one). This picker is an
-                // overlay surface, so the indicator always stacks above the
-                // bar, which itself stays un-dimmed behind it.
-                Rectangle {
-                    id: programLabel
-                    visible: pickWin.ownsHover
-                    readonly property rect barRect: Theme.isPrimaryScreen(pickWin.modelData)
-                        ? Theme.barWindowRect : Qt.rect(0, 0, 0, 0)
-                    readonly property real barH: barRect.height > 0 ? barRect.height : Theme.barThickness
-                    width: Math.min(labelText.implicitWidth + 36, pickWin.width - 32)
-                    height: 30
-                    radius: height / 2
-                    x: Math.round((pickWin.width - width) / 2)
-                    y: Math.round(Math.max(2, barRect.y + (barH - height) / 2))
-                    color: Theme.panelWindowBg
-                    border.color: Theme.accent
-                    border.width: 2
-                    antialiasing: Theme.shapesAa
-
-                    Text {
-                        id: labelText
-                        anchors.centerIn: parent
-                        width: parent.width - 24
-                        horizontalAlignment: Text.AlignHCenter
-                        elide: Text.ElideRight
-                        text: pickWin.hovered
-                            ? (pickWin.hovered.appId + (pickWin.hovered.title.length > 0 ? " — " + pickWin.hovered.title : ""))
-                            : ""
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fs(13)
-                        font.weight: Font.DemiBold
-                        antialiasing: Theme.textAa
-                        renderType: Theme.textRenderType
-                    }
-                }
-
-                // Bottom hint while nothing is hovered, same shape language
-                // as the pill.
-                Rectangle {
-                    id: pickHint
-                    visible: pickWin.hovered === null
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: scope.bottomMargin
-                    width: hintText.implicitWidth + 40
-                    height: 48
-                    radius: height / 2
-                    color: Theme.panelWindowBg
-                    border.color: Theme.panelBorderColor
-                    border.width: 2
-                    antialiasing: Theme.shapesAa
-                    Text {
-                        id: hintText
-                        anchors.centerIn: parent
-                        width: Math.min(implicitWidth, pickHint.parent.width - 80)
-                        horizontalAlignment: Text.AlignHCenter
-                        elide: Text.ElideRight
-                        text: "Release over a window to capture · Esc to cancel"
-                        color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fs(13)
-                        font.weight: Font.Medium
-                        antialiasing: Theme.textAa
-                        renderType: Theme.textRenderType
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.AllButtons
-                    cursorShape: Qt.CrossCursor
-                    // Seed the highlight when the pointer lands on the freshly
-                    // mapped surface (it can appear under a stationary
-                    // pointer; wl_pointer.enter still arrives).
-                    onContainsMouseChanged: if (containsMouse) scope.updateHover(pickWin.modelData, mouseX, mouseY)
-                    onPositionChanged: mouse => scope.updateHover(pickWin.modelData, mouse.x, mouse.y)
-                    onPressed: mouse => scope.updateHover(pickWin.modelData, mouse.x, mouse.y)
-                    onReleased: mouse => {
-                        if (mouse.button === Qt.RightButton) {
-                            scope.cancelWindowPick()
-                            return
-                        }
-                        if (mouse.button !== Qt.LeftButton) return
-                        scope.updateHover(pickWin.modelData, mouse.x, mouse.y)
-                        scope.pickWindow(scope.hoveredGeometry)
                     }
                 }
             }

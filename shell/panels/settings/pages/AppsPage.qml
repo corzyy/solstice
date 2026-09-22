@@ -10,7 +10,7 @@ import ".."
 // Apps — default applications and the app library.
 //
 // "Default applications" binds the terminal / browser / file manager to the
-// matching Umbriel spawn shortcut. Picking an app runs
+// matching Hyprland spawn bind. Picking an app runs
 // backend/scripts/apps-manage.py, which rebinds the chord the previous
 // command held (config-reload included, so the shortcut changes live) and
 // remembers the selection in backend/config/default_apps.json.
@@ -421,7 +421,7 @@ NexusControls.PageBase {
     }
     NexusControls.Note {
         visible: root.view === ""
-        text: "Picking an app rebinds the matching Umbriel shortcut right away."
+        text: "Picking an app rebinds the matching Hyprland bind right away."
     }
 
     // ---- overview: library ------------------------------------------------

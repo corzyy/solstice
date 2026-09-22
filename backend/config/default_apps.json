@@ -5,5 +5,12 @@
         "command": "helium",
         "id": "helium",
         "name": "Helium"
+    },
+    "terminal": {
+        "action": "spawn:kitty",
+        "chord": "Mod+Return",
+        "command": "kitty",
+        "id": "kitty",
+        "name": "kitty"
     }
 }

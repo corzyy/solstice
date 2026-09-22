@@ -17,7 +17,7 @@
 //                           200ms default effects out
 //
 // Caelestia's bar is vertical so its curtain runs on x; the identical math
-// runs on y for solstice's horizontal bar (open from the top/bottom panel edge).
+// runs on y for solstice's top bar.
 //
 // One addition over the reference: the layer surface only maps on open, so
 // the driver waits for the first rendered frame — starting the Behavior at
@@ -43,6 +43,22 @@
 // same beat and fades underneath it. The incoming content follows with the
 // shared-axis travel. Hosts bind content opacity to `contentFade` and the
 // transform to `contentScale`/`contentOffset*` (PanelShell does both).
+//
+// Fourth addition: the overlay container transform. A drill-in opened from
+// a control-center tile/button claims the origin's source descriptor
+// ({ component, props }, published by the CC) into `_morphSource`; the host
+// (PanelShell) renders that replica over the growing card and morphs it
+// into the page header. `_overlayContent` is the crossfade between the
+// replica (0) and the real page content (1): the open run brings the
+// content in over the tail, the return takes it out up front so the replica
+// can shrink back into the button.
+//
+// Fifth addition: interrupted runs never snap. A popout switched away while
+// its card is still gliding in freezes at its current pose — the successor
+// claimed that same rect — and dissolves in place (`_inFade`), releasing the
+// frozen geometry only once it is invisible; a return re-opened mid-collapse
+// resumes from the card's current pose instead of snapping back to the
+// origin button.
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
@@ -53,18 +69,15 @@ Item {
     id: root
 
     property bool shown: false
-    // Bar side the popout hangs off.
-    property string barPos: "top"
     // Open (full) size of the popout. Changes glide on the spatial curve
     // while open (Caelestia Wrapper implicitWidth/implicitHeight).
     property real fullWidth: 300
     property real fullHeight: 200
-    // Perpendicular centre the popout tracks: the bar item's centre on that
-    // axis (Caelestia popouts.currentCenter).
+    // Perpendicular centre the popout tracks: the bar item's centre
+    // (Caelestia popouts.currentCenter).
     property real anchorCenter: 0
-    // Along-axis coordinate of the bar's inner edge: the fixed edge the
-    // curtain reveals from. Top bar: panel top; bottom: panel bottom;
-    // left: panel left; right: panel right.
+    // Coordinate of the bar's inner edge: the fixed edge the
+    // curtain reveals from (top bar: panel top).
     property real edge: 0
     property real screenSize: 0
     property real margin: 12
@@ -86,17 +99,13 @@ Item {
     readonly property alias offsetScale: root._offsetScale
     // Inner (popout) fold fade, for hosts to bind their content to.
     readonly property alias innerFade: root._innerFade
-    readonly property bool horizontalBar: barPos === "top" || barPos === "bottom"
     // Corners on the bar side stay square: the popout meets the bar edge
     // with a clean right angle instead of a rounded corner cutout. An inset
     // card floats free of the bar, so it keeps its rounded corners.
-    readonly property bool fusedTop: root.horizontalBar && root.barPos === "top" && root.edgeInset === 0
-    readonly property bool fusedBottom: root.horizontalBar && root.barPos === "bottom" && root.edgeInset === 0
-    readonly property bool fusedLeft: !root.horizontalBar && root.barPos === "left" && root.edgeInset === 0
-    readonly property bool fusedRight: !root.horizontalBar && root.barPos === "right" && root.edgeInset === 0
+    readonly property bool fusedTop: root.edgeInset === 0
     // Settled (open) sizes, straight from the host bindings.
-    readonly property real settledAxis: horizontalBar ? fullHeight : fullWidth
-    readonly property real settledPerp: horizontalBar ? fullWidth : fullHeight
+    readonly property real settledAxis: fullHeight
+    readonly property real settledPerp: fullWidth
 
     // ---- cross-panel morph (style/ui/PanelMorph, see header) -----------------
     // morphId is the bar module id of the host panel: it keys the published
@@ -116,6 +125,14 @@ Item {
     property bool _morphFade: false
     property bool _morphStarted: false
     property int _morphDir: 0
+    // Source descriptor ({ component, props }) published with the origin by
+    // the control center: the host (PanelShell) renders it as the
+    // container-transform replica. Claimed by _tryMorphIn, held until the
+    // return has dissolved into the origin button.
+    property var _morphSource: null
+    // Overlay container transform: crossfade between the source replica (0)
+    // and the real page content (1). Only meaningful while `_overlayOrigin`.
+    property real _overlayContent: 1
     // Content choreography (driven by the animations below): the outgoing
     // content leads — it fades/shifts out while the incoming card is still
     // hidden — then the card is swapped in and the incoming content
@@ -123,6 +140,13 @@ Item {
     property real _morphCardIn: 1
     property real _morphContentIn: 1
     property real _morphContentOut: 1
+    // Interrupted-in dissolve: a popout switched away while its card is still
+    // gliding in freezes at its current pose (the successor claimed that same
+    // rect) and fades out in place. The flag-based card fade cannot carry it:
+    // the holder's opacity Behavior is disabled during morph-in (the card is
+    // driven by `_morphCardIn` then), so this animated 1 -> 0 value drives the
+    // freeze-and-dissolve instead.
+    property real _inFade: 1
     // Only the primary screen's window runs the handoff; the other screen
     // variants share the show flags but never map. Hosts pass
     // Theme.isPrimaryScreen(modelData) down (PanelShell forwards it via
@@ -132,17 +156,20 @@ Item {
     // Effective sizes/edge: morphed while a run drives `_morphT` (in from a
     // button/panel pose, or back into the origin), settled otherwise.
     readonly property bool _morphing: root._morphIn || root._morphBack
-    readonly property real axisSize: root._morphing ? (horizontalBar ? _morphH : _morphW) : settledAxis
-    readonly property real perpSize: root._morphing ? (horizontalBar ? _morphW : _morphH) : settledPerp
+    readonly property real axisSize: root._morphing ? _morphH : settledAxis
+    readonly property real perpSize: root._morphing ? _morphW : settledPerp
     readonly property real effEdge: root._morphing ? _morphEdge : edge
-    // Overlay-return fade: the card dissolves as it shrinks into the button
-    // (the tile is revealed underneath, not covered by a vanishing card).
-    // Driven on the wall clock (`_backOpacity`, see morphBackFadeAnim), not
-    // by `_morphT`: the spatial curve front-loads the shrink, so a fade
-    // keyed to the curve value would finish within the first frames and the
-    // card would vanish before the retraction is ever visible.
-    property real _backOpacity: 1
-    readonly property real _backFade: root._morphBack ? root._backOpacity : 1
+    // Overlay-return fade: the card dissolves as it lands on the button (the
+    // tile is revealed underneath, not covered by a vanishing card). Keyed to
+    // the spatial progress, not the wall clock: the card stays solid while it
+    // travels (the standard return curve spreads the distance evenly) and
+    // fades only over the last tenth of the distance — by then the replica is
+    // within a few pixels of the origin rect — so the CC tile (revealed in
+    // lockstep via sourceReveal) crossfades with it at the same pose instead
+    // of ghosting next to it mid-flight.
+    readonly property real _backFade: root._morphBack
+        ? Math.max(0, Math.min(1, root._morphT / 0.1))
+        : 1
     // Card rect in window coordinates (== screen coordinates: every panel
     // window is full-screen). Published while open so the next switch can
     // start from the exact pose this card settles at.
@@ -164,8 +191,6 @@ Item {
             morphSettleTimer.stop()
             morphRun.stop()
             morphBackAnim.stop()
-            morphBackFadeAnim.stop()
-            root._backOpacity = 1
             if (root._tryMorphIn())
                 return
             morphHoldTimer.stop()
@@ -187,9 +212,15 @@ Item {
                 return
             if (root._tryMorphBack())
                 return
+            if (root._morphIn) {
+                // Dismissed mid-glide (no handoff to hand the pose to):
+                // dissolve the frozen card in place instead of releasing
+                // `_morphIn` (which would snap the frame to its settled size
+                // for the close run).
+                root.dropMorphOut()
+                return
+            }
             morphBackAnim.stop()
-            morphBackFadeAnim.stop()
-            root._backOpacity = 1
             morphHoldTimer.stop()
             morphFadeTimer.stop()
             root.stopMorphRuns()
@@ -334,14 +365,63 @@ Item {
         easing.type: Easing.BezierSpline
         easing.bezierCurve: Theme.curveFastEffects
     }
+    // Interrupted-in dissolve (see `_inFade`): freezes the card at its current
+    // morph pose and dissolves it in place. The geometry is only released once
+    // this has landed (invisible), so the frame never snaps mid-fade.
+    NumberAnimation {
+        id: inFadeAnim
+        target: root
+        property: "_inFade"
+        from: 1
+        to: 0
+        duration: Theme.durDefaultEffects
+        easing.type: Easing.BezierSpline
+        easing.bezierCurve: Theme.curveDefaultEffects
+        onFinished: root._resetInterruptedIn()
+    }
+    // Overlay container transform: the replica leads the open run while the
+    // page content follows over the tail of the card glide (delay + fade
+    // half of durPanelMorph each, so the handoff happens at the header pose
+    // once the card has essentially settled).
+    SequentialAnimation {
+        id: overlayContentInAnim
+        PauseAnimation { id: overlayContentPause; duration: Theme.panelMorphReplicaDelay }
+        NumberAnimation {
+            target: root
+            property: "_overlayContent"
+            from: 0
+            to: 1
+            duration: Theme.panelMorphReplicaFade
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: Theme.curveDefaultEffects
+        }
+    }
+    // Return: the content drops as the return starts, so the replica takes
+    // over the whole collapse (and crossfades back into the CC tile, which
+    // sourceReveal mirrors).
+    NumberAnimation {
+        id: overlayContentOutAnim
+        target: root
+        property: "_overlayContent"
+        to: 0
+        duration: Theme.panelMorphContentOut
+        easing.type: Easing.BezierSpline
+        easing.bezierCurve: Theme.curveFastEffects
+    }
     function stopMorphRuns(): void {
         morphCardInAnim.stop()
         morphGlidePhase.stop()
         morphContentInAnim.stop()
         morphContentOutAnim.stop()
+        overlayContentInAnim.stop()
+        overlayContentOutAnim.stop()
+        inFadeAnim.stop()
         root._morphCardIn = 1
         root._morphContentIn = 1
         root._morphContentOut = 1
+        root._overlayContent = 1
+        root._inFade = 1
+        root._morphSource = null
     }
     // Abort a morph-out without flashing the content back in: the outgoing
     // content may already be gone (it leads from the moment the switch
@@ -351,12 +431,48 @@ Item {
         morphCardInAnim.stop()
         morphGlidePhase.stop()
         morphContentInAnim.stop()
+        overlayContentInAnim.stop()
+        overlayContentOutAnim.stop()
         if (root._overlayOrigin)
             root._clearOverlaySource()
+        if (root._morphIn) {
+            // Interrupted incoming side (switched away or dismissed mid-
+            // glide): freeze at the current pose and dissolve there. The
+            // successor claimed this exact rect, so the two line up, and
+            // releasing `_morphIn` now would snap the frame to its settled
+            // size while the card is still fading.
+            morphRun.stop()
+            morphBackAnim.stop()
+            morphSettleTimer.stop()
+            morphHoldTimer.stop()
+            morphFadeTimer.stop()
+            morphFrame.running = false
+            root._morphStarted = false
+            root._morphOut = true
+            root._morphFade = true
+            if (!inFadeAnim.running) {
+                root._inFade = 1
+                inFadeAnim.restart()
+            }
+            return
+        }
+        root._overlayContent = 1
         root._morphIn = false
         root._morphOut = false
         root._morphFade = true
         root._open = false
+    }
+    // The interrupted-in dissolve has landed: release the frozen geometry now
+    // that the card is fully transparent (the bindings snap with opacity 0,
+    // so the snap is invisible).
+    function _resetInterruptedIn(): void {
+        if (!root._morphIn)
+            return
+        root._open = false
+        root._morphIn = false
+        root._morphOut = false
+        root._morphFade = false
+        root.stopMorphRuns()
     }
 
     function _publishRect(): void {
@@ -370,7 +486,12 @@ Item {
     // Incoming side: claim the origin pose (a button rect for an overlay
     // drill-in, the outgoing card otherwise), then glide to the settled one.
     function _tryMorphIn(): bool {
-        if (!root.morphEnabled || root._morphIn)
+        // No `_morphIn` guard: a re-targeted switch can arrive while this
+        // popout is still dissolving an earlier interrupted glide, and the
+        // handoff must take over that frozen card (the dissolve is stopped
+        // with the other drivers below) instead of falling back to a plain
+        // open over the successor.
+        if (!root.morphEnabled)
             return false
         if (root.morphId === "" || !PanelMorph.isTarget(root.morphId))
             return false
@@ -383,6 +504,14 @@ Item {
             PanelMorph.finish()
             return false
         }
+        // Interrupted return (re-opened mid-collapse): continue from the
+        // card's current return pose instead of snapping back to the origin
+        // rect. The origin is the same button either way.
+        const wasBack = root._morphBack
+        const curW = root._morphW
+        const curH = root._morphH
+        const curPos = root._morphPos
+        const curEdge = root._morphEdge
         root._overlayOrigin = o !== null
         root._morphOut = false
         root._morphBack = false
@@ -390,19 +519,37 @@ Item {
         morphHoldTimer.stop()
         morphFadeTimer.stop()
         morphBackAnim.stop()
+        morphSettleTimer.stop()
         morphRun.stop()
         morphCardInAnim.stop()
         morphGlidePhase.stop()
         morphContentInAnim.stop()
         morphContentOutAnim.stop()
+        overlayContentInAnim.stop()
+        overlayContentOutAnim.stop()
+        inFadeAnim.stop()
+        root._inFade = 1
         root._morphT = 0
-        root._fromW = r.width
-        root._fromH = r.height
-        root._fromPos = root.horizontalBar ? r.x : r.y
-        root._fromEdge = root.horizontalBar
-            ? (root.barPos === "top" ? r.y : r.y + r.height)
-            : (root.barPos === "left" ? r.x : r.x + r.width)
+        if (wasBack) {
+            root._fromW = curW
+            root._fromH = curH
+            root._fromPos = curPos
+            root._fromEdge = curEdge
+        } else {
+            root._fromW = r.width
+            root._fromH = r.height
+            root._fromPos = r.x
+            root._fromEdge = r.y
+        }
         root._morphDir = PanelMorph.direction
+        // Source replica (container transform) rides the origin object; only
+        // an overlay run can carry one. The content starts fully hidden
+        // behind it and follows over the tail (overlayContentInAnim).
+        root._morphSource = root._overlayOrigin && o !== null && o.source !== undefined ? o.source : null
+        root._overlayContent = root._overlayOrigin ? 0 : 1
+        // Overlay runs morph on the even container curve (see Theme); a
+        // sibling-card handoff keeps the curtain's panel-open attack.
+        morphRun.easing.bezierCurve = root._overlayOrigin ? Theme.curvePanelMorphOverlay : Theme.curvePanelMorph
         root._morphCardIn = 0
         root._morphContentIn = 0
         root._morphContentOut = 1
@@ -425,16 +572,24 @@ Item {
             // what is left of the lead is waited out here: a late surface
             // map glides immediately instead of adding a full fixed pause.
             // markReady releases the outgoing card on the same beat. An
-            // overlay drill-in has no outgoing side: it glides from the
-            // start and shows its content with the card.
+            // overlay drill-in has no outgoing side: the card is already
+            // rendering its source replica at the origin pose on this frame,
+            // so the glide (and the replica's morph) starts immediately.
             const lead = root._overlayOrigin ? 0 : PanelMorph.leadRemaining(Theme.panelMorphLead)
             root._morphStarted = true
             morphCardPause.duration = lead
             morphGlidePause.duration = lead
-            morphContentInPause.duration = root._overlayOrigin ? 0 : Theme.panelMorphContentDelay
             morphCardInAnim.restart()
             morphGlidePhase.restart()
-            morphContentInAnim.restart()
+            if (root._overlayOrigin) {
+                // Container transform: the source replica leads, the page
+                // content follows over the tail of the card glide.
+                overlayContentPause.duration = Theme.panelMorphReplicaDelay
+                overlayContentInAnim.restart()
+            } else {
+                morphContentInPause.duration = Theme.panelMorphContentDelay
+                morphContentInAnim.restart()
+            }
             morphSettleTimer.interval = lead + Theme.durPanelMorph + 20
             morphSettleTimer.restart()
             if (root._overlayOrigin) {
@@ -471,6 +626,10 @@ Item {
         morphGlidePhase.stop()
         morphContentInAnim.stop()
         morphContentOutAnim.stop()
+        overlayContentInAnim.stop()
+        overlayContentOutAnim.stop()
+        inFadeAnim.stop()
+        root._inFade = 1
         root._morphIn = false
         root._morphOut = false
         root._morphFade = false
@@ -482,16 +641,14 @@ Item {
         // Continue from wherever the card is (an interrupted open starts its
         // return mid-pose instead of snapping to fully open first).
         morphBackAnim.from = Math.min(1, Math.max(0, root._morphT))
-        // The origin button reappears exactly as the card dissolves into it:
-        // its reveal mirrors the card's own return fade (1 -> 0), so the two
+        // The page content drops right away and the source replica takes
+        // over the collapse from the header pose; the origin button then
+        // reappears exactly as the card dissolves into it (sourceReveal
+        // mirrors the card's own return fade, 1 -> 0), so the two
         // cross-dissolve at the button pose. The binding self-resets to 1
         // when `_morphBack` clears in _finishMorphBack.
+        overlayContentOutAnim.restart()
         PanelMorph.sourceReveal = Qt.binding(() => 1 - root._backFade)
-        // The retraction stays solid for the first stretch, then the whole
-        // panel — background and scaled content together, via the holder's
-        // own fade — dissolves into the button over the remaining slice.
-        root._backOpacity = 1
-        morphBackFadeAnim.restart()
         morphBackAnim.restart()
         return true
     }
@@ -508,28 +665,8 @@ Item {
         easing.bezierCurve: Theme.curveStandard
         onFinished: root._finishMorphBack()
     }
-    // Wall-clock dissolve for the return: solid for the first 40%, then
-    // fades over the rest — independent of the spatial curve, so the shrink
-    // is always visible and the button crossfades in right at the dock. The
-    // long, softly eased tail blends the shrink and the dissolve into one
-    // continuous collapse instead of a shrink followed by a fade.
-    SequentialAnimation {
-        id: morphBackFadeAnim
-        PauseAnimation { duration: Math.round(Theme.durPanelMorph * 0.4) }
-        NumberAnimation {
-            target: root
-            property: "_backOpacity"
-            from: 1
-            to: 0
-            duration: Math.round(Theme.durPanelMorph * 0.6)
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.curveStandard
-        }
-    }
     function _finishMorphBack(): void {
         root.stopMorphRuns()
-        morphBackFadeAnim.stop()
-        root._backOpacity = 1
         // Instant: the drivers' Behaviors are disabled while `_morphBack`
         // is set, so the frame snaps shut at the origin pose instead of
         // playing a second curtain run from there.
@@ -552,7 +689,7 @@ Item {
     // while the card itself keeps holding, so a slow map can never expose
     // the desktop.
     function _tryMorphOut(): bool {
-        if (!root.morphEnabled || root._morphIn || !root._open)
+        if (!root.morphEnabled || !root._open)
             return false
         if (root.morphId === "" || !PanelMorph.isSource(root.morphId))
             return false
@@ -561,10 +698,33 @@ Item {
         if (root._overlayOrigin)
             root._clearOverlaySource()
         root._morphDir = PanelMorph.direction
-        root._morphOut = true
-        root._morphFade = false
-        root._morphContentOut = 1
-        morphContentOutAnim.restart()
+        if (root._morphIn) {
+            // The panel is still gliding in (quick re-switch). Freeze the
+            // card at its current pose — the successor starts from this same
+            // rect — and hold it visible until the incoming surface is up,
+            // then dissolve in place (morphFadeTimer -> dropMorphOut). Its
+            // content stays at the frozen incoming pose; the whole card
+            // fades as one.
+            morphRun.stop()
+            morphGlidePhase.stop()
+            morphCardInAnim.stop()
+            morphContentInAnim.stop()
+            overlayContentInAnim.stop()
+            morphSettleTimer.stop()
+            // Also cancel a pending first-frame gate: with `_morphStarted`
+            // cleared it would otherwise restart the whole open run on the
+            // next frame and fight the dissolve.
+            morphFrame.running = false
+            root._morphStarted = false
+            root._morphOut = true
+            root._morphFade = false
+            root._inFade = 1
+        } else {
+            root._morphOut = true
+            root._morphFade = false
+            root._morphContentOut = 1
+            morphContentOutAnim.restart()
+        }
         // Start the shared clock: the incoming side waits only the remainder
         // of the lead once its first frame lands (PanelMorph.leadRemaining).
         PanelMorph.noteDeparture()
@@ -614,6 +774,14 @@ Item {
         onTriggered: {
             if (!root._morphOut || root._morphFade)
                 return
+            if (root._morphIn) {
+                // Interrupted incoming side: dissolve the frozen card in
+                // place (dropMorphOut sets `_morphFade` first, so finish()'s
+                // Connections handler leaves the running dissolve alone).
+                root.dropMorphOut()
+                PanelMorph.finish()
+                return
+            }
             root._morphFade = true
             PanelMorph.finish()
         }
@@ -631,14 +799,14 @@ Item {
     // Content offset along the axis: full-size content parked outside the
     // frame's far edge (own driver -> independent motion).
     readonly property real contentTranslate: -axisSize * _contentOffset
-    readonly property real contentX: horizontalBar ? 0 : barPos === "left" ? contentTranslate : -contentTranslate
-    readonly property real contentY: horizontalBar ? barPos === "top" ? contentTranslate : -contentTranslate : 0
+    readonly property real contentX: 0
+    readonly property real contentY: contentTranslate
     // While the frame is shorter than the radius, clamp so it reads as a
     // pill being stretched out of the bar instead of a squashed panel.
     readonly property real frameRadius: Math.min(Theme.cornerRadius, frameAxis / 2)
 
-    width: horizontalBar ? perpExtent + perpPad * 2 : frameExtent + shadowPad
-    height: horizontalBar ? frameExtent + shadowPad : perpExtent + perpPad * 2
+    width: perpExtent + perpPad * 2
+    height: frameExtent + shadowPad
     visible: frameAxis > 0.5
     clip: true
 
@@ -670,8 +838,8 @@ Item {
     }
     // The fixed edge stays put; the far edge is where the curtain grows.
     // Integer positions keep the shadow source texture 1:1 (no shimmer).
-    x: horizontalBar ? Math.round(perpPos - perpPad) : barPos === "left" ? Math.round(effEdge) : Math.round(effEdge - width)
-    y: horizontalBar ? barPos === "top" ? Math.round(effEdge) : Math.round(effEdge - height) : Math.round(perpPos - perpPad)
+    x: Math.round(perpPos - perpPad)
+    y: Math.round(effEdge)
 
     // Wrapper implicitWidth/implicitHeight Behaviors. Panel-open curve: the
     // first size settle after a cold open is part of the opening run and
@@ -697,16 +865,18 @@ Item {
     // True while a size Behavior is gliding: the perp position must then
     // follow perpTarget directly (see the perpPos Behavior above). Hosts
     // resize while open whenever the content changes pose (launcher prefix
-    // pages, calendar month heights, tray list growth).
+    // pages, notification list growth, tray list growth).
     readonly property bool _resizing: fullWidthAnim.running || fullHeightAnim.running
 
     // Drop shadow, cast from a plain card silhouette instead of the card
     // contents. The layer wraps only the flat card shape, never the panel
     // text, and the popout paints the card fill here; host cards stay
     // transparent so the silhouette is only composited once. sourceRect
-    // reaches into the perpendicular padding so the effect can spill into
-    // perpPad/shadowPad, and the popout's own clip cuts the shadow at the
-    // fused bar edge.
+    // reaches into the padding on every free side so the blur can spill
+    // there; the fused bar edge stays clipped so the panel keeps reading
+    // as one mass with the bar (the popout viewport has no room there
+    // either). Without the free-edge room the layer texture ends at the
+    // card edge and the shadow is cut mid-blur into a hard-edged smudge.
     //
     // The layer's geometry is the SETTLED card and the current frame is
     // painted by scaling that texture (Scale below) instead of resizing the
@@ -729,8 +899,8 @@ Item {
         // Settled card size: the static layer geometry (holder's size at
         // rest, so the scale is exactly 1 when settled and the fill/border
         // seam stays hairline-free).
-        readonly property real baseW: Math.max(1, Math.ceil(root.horizontalBar ? root.settledPerp : root.settledAxis))
-        readonly property real baseH: Math.max(1, Math.ceil(root.horizontalBar ? root.settledAxis : root.settledPerp))
+        readonly property real baseW: Math.max(1, Math.ceil(root.settledPerp))
+        readonly property real baseH: Math.max(1, Math.ceil(root.settledAxis))
         // Settled corner radius (frameRadius only clamps while the curtain
         // is shorter than the radius; at rest the two are equal).
         readonly property real baseRadius: Math.min(Theme.cornerRadius, Math.min(baseW, baseH) / 2)
@@ -743,29 +913,34 @@ Item {
         // The morphing card fades its frame; the shadow must follow.
         opacity: holder.opacity
         layer.enabled: true
-        layer.sourceRect: Qt.rect(-root.perpPad, 0, width + root.perpPad * 2, height)
+        // Blur spill room on every side the viewport has room (perpPad on
+        // the flanks, shadowPad past the free edge); the fused bar edge is
+        // left out, matching the viewport clip.
+        layer.sourceRect: Qt.rect(-root.perpPad, 0, width + root.perpPad * 2, height + root.shadowPad)
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: Theme.withAlpha(Theme.shadow, 0.5)
             shadowOpacity: 0.45
             shadowBlur: 0.9
+            // Cast away from the fused bar edge.
+            shadowHorizontalOffset: 0
             shadowVerticalOffset: 8
         }
         // Frame pinned at the fused bar edge (axis) and anchored at the
         // card's near corner (perp: holder coordinates start at the card
         // edge).
         transform: Scale {
-            origin.x: root.horizontalBar ? 0 : root.barPos === "right" ? shadowSource.width : 0
-            origin.y: root.horizontalBar ? root.barPos === "bottom" ? shadowSource.height : 0 : 0
+            origin.x: 0
+            origin.y: 0
             xScale: holder.width / shadowSource.width
             yScale: holder.height / shadowSource.height
         }
         Rectangle {
             anchors.fill: parent
-            topLeftRadius: (root.fusedTop || root.fusedLeft) ? 0 : shadowSource.baseRadius
-            topRightRadius: (root.fusedTop || root.fusedRight) ? 0 : shadowSource.baseRadius
-            bottomLeftRadius: (root.fusedBottom || root.fusedLeft) ? 0 : shadowSource.baseRadius
-            bottomRightRadius: (root.fusedBottom || root.fusedRight) ? 0 : shadowSource.baseRadius
+            topLeftRadius: root.fusedTop ? 0 : shadowSource.baseRadius
+            topRightRadius: root.fusedTop ? 0 : shadowSource.baseRadius
+            bottomLeftRadius: shadowSource.baseRadius
+            bottomRightRadius: shadowSource.baseRadius
             color: Theme.panelWindowBg
             antialiasing: Theme.shapesAa
         }
@@ -829,8 +1004,6 @@ Item {
 
         Fillet { side: "left"; atTop: true; visible: root.fusedTop && Theme.cornerRadius > 0 }
         Fillet { side: "right"; atTop: true; visible: root.fusedTop && Theme.cornerRadius > 0 }
-        Fillet { side: "left"; atTop: false; visible: root.fusedBottom && Theme.cornerRadius > 0 }
-        Fillet { side: "right"; atTop: false; visible: root.fusedBottom && Theme.cornerRadius > 0 }
     }
 
     // Holder = the stretched frame. Its near edge sits exactly on the bar
@@ -840,20 +1013,30 @@ Item {
     Item {
         id: holder
 
-        x: root.horizontalBar ? root.perpPad : root.barPos === "left" ? 0 : root.shadowPad
-        y: root.horizontalBar ? root.barPos === "top" ? 0 : root.shadowPad : root.perpPad
-        width: root.horizontalBar ? root.perpExtent : root.frameExtent
-        height: root.horizontalBar ? root.frameExtent : root.perpExtent
+        x: root.perpPad
+        y: 0
+        width: root.perpExtent
+        height: root.frameExtent
 
         // Comp transition: 0/1 with default effects both ways. A morphing
         // source fades its frame here once the incoming surface is up.
         // During a morph-in the card is hidden through `_morphCardIn`
         // until the lead phase ends (driven in morphFrame), so the outgoing
         // content is never cut off by an abrupt cover. A morph-back fades
-        // the card as it shrinks into the origin button (`_backFade`).
-        opacity: root._open && !root._morphFade
-            ? (root._morphIn ? root._morphCardIn : (root._morphBack ? root._backFade : 1))
-            : 0
+        // the card as it lands on the origin button (`_backFade`). An
+        // interrupted morph-in dissolves the frozen card through `_inFade`
+        // (the Behavior stays off for morph-in, so the value drives it).
+        opacity: {
+            if (!root._open)
+                return 0
+            if (root._morphIn)
+                return root._morphCardIn * root._inFade
+            if (root._morphFade)
+                return 0
+            if (root._morphBack)
+                return root._backFade
+            return 1
+        }
         Behavior on opacity {
             enabled: Theme.animationsEnabled && !root._morphIn && !root._morphBack
             Anim {
@@ -869,40 +1052,44 @@ Item {
     // (PanelShell multiplies it into innerFade) and their content transform
     // to contentScale/contentOffset*.
     // The leaving side: a morph-out handoff or an overlay return. Handoffs
-    // fade the content out ahead of the frame; the overlay return keeps it
-    // (scaling with the card, see contentShrink) and dissolves it with the
-    // card, so the whole panel reads as one container collapsing.
-    readonly property bool _contentLeaving: root._morphOut || root._morphBack
-    property real contentFade: root._morphBack ? 1
-                             : root._morphOut ? root._morphContentOut
-                             : root._morphIn ? root._morphContentIn
+    // fade the content out ahead of the frame; an overlay return drops it
+    // right away so the source replica can carry the collapse back into the
+    // button (the card dissolves after it, see _backFade).
+    readonly property bool _contentLeaving: (root._morphOut && !root._morphIn) || root._morphBack
+    // Incoming content progress: overlay runs crossfade from the source
+    // replica (`_overlayContent`), regular handoffs from `_morphContentIn`.
+    readonly property real _contentIn: root._overlayOrigin ? root._overlayContent : root._morphContentIn
+    // An interrupted incoming side (`_morphIn && _morphOut`) keeps its frozen
+    // incoming content pose while the whole card dissolves: the flag-based
+    // content-out run would pop the crossfade to full for a card that never
+    // reached it.
+    property real contentFade: (root._morphOut && !root._morphIn) ? root._morphContentOut
+                             : root._morphBack ? (root._overlayOrigin ? root._overlayContent : 1)
+                             : root._morphIn ? root._contentIn
                              : 1
-    readonly property real morphOutT: root._morphBack ? 1 - root._backFade
-                                     : root._morphOut ? 1 - root._morphContentOut
-                                     : 0
-    // Button-origin runs (overlay open + return): the content layout scales
-    // with the frame, so the full panel is a miniature of itself while it
-    // grows out of / collapses into the button (container transform) instead
-    // of being a full-size window onto the shrinking card. Regular handoffs
-    // keep 1 (their start pose is a sibling card, not a button).
-    readonly property real contentShrink: {
-        if (!root._overlayOrigin || !root._morphing)
-            return 1
-        const rw = root.perpSize / Math.max(1, root.settledPerp)
-        const rh = root.axisSize / Math.max(1, root.settledAxis)
-        return Math.max(0.05, Math.min(rw, rh))
-    }
+    readonly property real morphOutT: root._morphBack
+        ? 1 - root._overlayContent
+        : (root._morphOut && !root._morphIn) ? 1 - root._morphContentOut
+        : 0
+    // Replica visibility for the host (PanelShell renders the source
+    // component while this is > 0): inverse of the content crossfade, hidden
+    // once the run is over or the panel is switching away. An interrupted
+    // incoming side keeps its replica: the card dissolves as one mass.
+    readonly property real morphReplicaOpacity: (root._morphSource === null
+        || (!root._morphIn && (root._morphOut || root._morphFade)))
+        ? 0
+        : Math.max(0, 1 - root._overlayContent)
     // Shared-axis travel: drill-in switches push the content along the bar
     // axis (forward: old content exits up, new arrives from below; back:
     // mirrored). Lateral switches (bar panel <-> bar panel) crossfade with
     // the scale only, no travel.
     readonly property real morphTravel: root._contentLeaving
         ? -root._morphDir * Theme.panelMorphShift * root.morphOutT
-        : root._morphIn ? root._morphDir * Theme.panelMorphShift * (1 - root._morphContentIn) : 0
-    readonly property real contentOffsetX: (!root.horizontalBar && root._morphDir !== 0) ? root.morphTravel : 0
-    readonly property real contentOffsetY: (root.horizontalBar && root._morphDir !== 0) ? root.morphTravel : 0
+        : root._morphIn ? root._morphDir * Theme.panelMorphShift * (1 - root._contentIn) : 0
+    readonly property real contentOffsetX: 0
+    readonly property real contentOffsetY: root._morphDir !== 0 ? root.morphTravel : 0
     readonly property real contentScale: root._contentLeaving ? 1 - Theme.panelMorphScale * root.morphOutT
-                                        : root._morphIn ? 1 - Theme.panelMorphScale * (1 - root._morphContentIn)
+                                        : root._morphIn ? 1 - Theme.panelMorphScale * (1 - root._contentIn)
                                         : 1
 
     // Popout transition: slow effects on the way in, default effects out.

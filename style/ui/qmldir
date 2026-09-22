@@ -4,6 +4,8 @@ PanelShell 1.0 PanelShell.qml
 PanelSpring 1.0 PanelSpring.qml
 MSlider 1.0 MSlider.qml
 ScrollIndicator 1.0 ScrollIndicator.qml
+EdgeFade 1.0 EdgeFade.qml
+OverscrollSpring 1.0 OverscrollSpring.qml
 Anim 1.0 Anim.qml
 Motion 1.0 Motion.qml
 StateLayer 1.0 StateLayer.qml
@@ -13,3 +15,6 @@ IslandMorph 1.0 IslandMorph.qml
 CaelestiaPopout 1.0 CaelestiaPopout.qml
 singleton PanelMorph 1.0 PanelMorph.qml
 singleton Util 1.0 Util.qml
+singleton CarouselEffect 1.0 CarouselEffect.qml
+CarouselCard 1.0 CarouselCard.qml
+CarouselParallaxImage 1.0 CarouselParallaxImage.qml

@@ -56,16 +56,26 @@ Scope {
     function unlock(): void {
         locked = false
         mergeRect = null
+        _queuedPin = ""
         resetPinState()
     }
     function refreshWallpaper(): void {
         if (!wallpaperResolveProc.running) wallpaperResolveProc.running = true
     }
+    // STABILITY: a submission while the previous auth is still running used
+    // to overwrite the command without starting it (Quickshell only reads
+    // `command` on the next start) — the corrected PIN was silently dropped.
+    // Queue the latest one and run it when the current attempt exits.
+    property string _queuedPin: ""
+    function startAuth(pin: string): void {
+        authProc.command = [Quickshell.shellDir + "/backend/scripts/lock-auth.sh", pin]
+        authProc.running = true
+    }
     function submitPin(): void {
         if (pinInput.length === 0) return
         clearPinError()
-        authProc.command = [Quickshell.shellDir + "/backend/scripts/lock-auth.sh", pinInput]
-        if (!authProc.running) authProc.running = true
+        if (authProc.running) { _queuedPin = pinInput; return }
+        startAuth(pinInput)
     }
 
     // Fehler-Reset ohne die gerade eingegebene PIN zu löschen.
@@ -94,7 +104,6 @@ Scope {
             onStreamFinished: lockScope.wallpaperPath = String(text || "").trim()
         }
     }
-    Component.onCompleted: refreshWallpaper()
 
     Process {
         id: authProc
@@ -103,12 +112,20 @@ Scope {
         onExited: (code) => {
             if (code === 0) {
                 lockScope.unlock()
-            } else {
-                lockScope.failed = true
-                lockScope.errorText = "Wrong PIN"
-                lockScope.pinInput = ""
-                failTimer.restart()
+                return
             }
+            // A queued retry runs instead of the error flash: the user already
+            // corrected the PIN while the first attempt was in flight.
+            if (lockScope._queuedPin.length > 0 && lockScope.locked) {
+                let p = lockScope._queuedPin
+                lockScope._queuedPin = ""
+                lockScope.startAuth(p)
+                return
+            }
+            lockScope.failed = true
+            lockScope.errorText = "Wrong PIN"
+            lockScope.pinInput = ""
+            failTimer.restart()
         }
     }
     Timer {
@@ -156,11 +173,14 @@ Scope {
                     : lockMotion.opacity
 
                 // Wallpaper: rendered as the blur source (hidden), the
-                // visible layer is the MultiEffect below.
+                // visible layer is the MultiEffect below. PERF: the source is
+                // only assigned while locked — a permanently assigned full
+                // resolution wallpaper decoded (cache:false) on every screen
+                // at shell start even when the user never locks.
                 Image {
                     id: bgImage
                     anchors.fill: parent
-                    source: lockScope.wallpaperSource
+                    source: lockScope.locked ? lockScope.wallpaperSource : ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false

@@ -2,9 +2,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
+import QtQuick.Effects
 import Quickshell
+import Quickshell.Io
 import Quickshell.Widgets
 import "../../style/themes"
+import "../../style/ui" as Ui
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
 
@@ -13,7 +16,6 @@ Scope {
     property var notifServer
 
     readonly property int barT: Theme.barThickness
-    readonly property string barPos: Theme.barPosition
     // Preferred display for toasts: DP-1 when present, else the first
     // available screen (see Theme.primaryScreenName).
     property var targetScreen: {
@@ -41,6 +43,156 @@ Scope {
     readonly property bool notifCenter: notifPos.endsWith("center")
     readonly property int cardWidth: 380
     readonly property int edgeGap: 12
+
+    // ---- Screenshot toast (custom bottom-right preview card) ----
+    // screenshot.sh posts `notify-send -a Screenshot -i <file>`, which lands
+    // in trackedNotifications like any other toast. Screenshot entries are
+    // excluded from the generic stack below and rendered here instead: a
+    // large rounded preview card pinned to the bottom-right, like the
+    // reference (image on top, file row + actions at the bottom).
+    readonly property var allTracked: {
+        try {
+            if (!notifScope.notifServer || !notifScope.notifServer.trackedNotifications) return []
+            const m = notifScope.notifServer.trackedNotifications
+            const v = m.values
+            const arr = (typeof v === "function") ? v() : v
+            if (!arr || !arr.length) {
+                // Map-like model without .values array: fall back to the
+                // map itself so the generic Repeater keeps working.
+                return []
+            }
+            return arr.slice()
+        } catch (e) { return [] }
+    }
+    function isShotNotif(n: var): bool {
+        try { return String(n.appName || "").toLowerCase() === "screenshot" } catch (e) { return false }
+    }
+    readonly property var shotNotifs: allTracked.filter(n => notifScope.isShotNotif(n))
+    readonly property var genericNotifs: {
+        const all = allTracked
+        if (all.length === 0) return allTracked
+        return all.filter(n => !notifScope.isShotNotif(n))
+    }
+    // Falls back to the raw map when .values is unavailable (see allTracked).
+    readonly property var genericModel: allTracked.length > 0 ? genericNotifs : (notifScope.notifServer ? notifScope.notifServer.trackedNotifications : [])
+    readonly property var activeShot: shotNotifs.length > 0 ? shotNotifs[shotNotifs.length - 1] : null
+
+    property int shotId: -1
+    property bool shotVisible: false
+    property string shotPath: ""
+    property string shotName: ""
+    readonly property string shotImageSource: {
+        const p = String(notifScope.shotPath || "")
+        if (p.length === 0) return ""
+        if (p.startsWith("file://") || p.startsWith("image://") || p.startsWith("qrc:/")) return p
+        if (p.startsWith("/")) return "file://" + p
+        return p
+    }
+    readonly property int shotTimeoutMs: {
+        try { return Math.max(0, Math.min(30, Math.round(Theme.notifTimeout))) * 1000 || 6000 } catch (e) { return 6000 }
+    }
+    onActiveShotChanged: {
+        if (notifScope.activeShot) notifScope.showShot(notifScope.activeShot)
+        else notifScope.shotVisible = false
+    }
+    // Synchronous screenshot toasts (`x-canonical-private-synchronous`) can
+    // update in place; the array identity changes even when the head object
+    // does not, so refresh from the list as well.
+    onShotNotifsChanged: {
+        const s = notifScope.shotNotifs
+        if (s.length > 0) notifScope.showShot(s[s.length - 1])
+    }
+    function showShot(n: var): void {
+        try {
+            notifScope.shotId = Number(n.id)
+            let p = String(n.image || n.appIcon || "")
+            // notify-send -i may hand over a themed icon name instead of a
+            // path; only keep real file paths (plain, file:// or the
+            // image://icon/ provider URL Quickshell builds from -i), else
+            // show the fallback.
+            if (!(p.startsWith("/") || p.startsWith("file://") || p.startsWith("image://"))) {
+                // Bodies carry the basename ("Screenshot_....png"); the image
+                // hint is the reliable path, so drop non-paths here.
+                if (!p.endsWith(".png") && !p.endsWith(".jpg")) p = ""
+            }
+            notifScope.shotPath = p
+            let b = String(n.body || n.summary || "")
+            notifScope.shotName = b.length > 0 ? b : "Screenshot"
+            notifScope.shotVisible = true
+            shotHideTimer.interval = notifScope.shotTimeoutMs > 0 ? notifScope.shotTimeoutMs : 6000
+            shotHideTimer.restart()
+        } catch (e) { }
+    }
+    function dismissShot(expire: bool): void {
+        shotHideTimer.stop()
+        notifScope.shotVisible = false
+        try {
+            const n = notifScope.activeShot
+            if (n && n.tracked) {
+                if (expire) n.expire()
+                else n.dismiss()
+            }
+        } catch (e) { }
+    }
+    Timer {
+        id: shotHideTimer
+        interval: 6000
+        repeat: false
+        onTriggered: notifScope.dismissShot(true)
+    }
+    Process {
+        id: shotOpenProc
+        command: ["true"]
+        onExited: (code, status) => { }
+    }
+    function shotPlainPath(): string {
+        let p = String(notifScope.shotPath || "")
+        // Quickshell exposes notify-send -i paths as image-provider URLs
+        // (image://icon/<path>); satty/xdg-open need the raw file path.
+        if (p.startsWith("file://")) p = p.substring(7)
+        else if (p.startsWith("image://icon/")) p = p.substring(13)
+        try {
+            if (p.indexOf("%") >= 0) p = decodeURIComponent(p)
+        } catch (e) { }
+        return p
+    }
+    function shotOpenFile(): void {
+        const fp = notifScope.shotPlainPath()
+        if (fp.length === 0) return
+        shotHideTimer.stop()
+        shotOpenProc.command = ["xdg-open", fp]
+        shotOpenProc.running = true
+        // Keep the card until its timeout; just restart the timer.
+        shotHideTimer.interval = notifScope.shotTimeoutMs > 0 ? notifScope.shotTimeoutMs : 6000
+        shotHideTimer.restart()
+    }
+    // Save: the shot is already on disk — reveal it in the file manager
+    // ("show where it was saved") and close the toast.
+    function shotSave(): void {
+        const fp = notifScope.shotPlainPath()
+        if (fp.length === 0) {
+            shotOpenProc.command = ["xdg-open", Quickshell.env("HOME") + "/Pictures/Screenshots"]
+        } else {
+            const dir = fp.indexOf("/") >= 0 ? fp.substring(0, fp.lastIndexOf("/")) : fp
+            shotOpenProc.command = ["bash", "-c", "xdg-open \"$0\" 2>/dev/null || xdg-open ~/Pictures/Screenshots", dir]
+        }
+        shotOpenProc.running = true
+        notifScope.dismissShot(false)
+    }
+    // Edit: open the shot in Satty (annotate/crop) and keep the toast
+    // around so it can still be saved or dismissed afterwards. Satty
+    // saves back to the same file (--output-filename) and is forced to a
+    // centered, tiled (non-floating) window by the Hyprland rule in
+    // ~/.config/hypr/configs/windowrules.lua (matched via --app-id).
+    function shotEdit(): void {
+        const fp = notifScope.shotPlainPath()
+        if (fp.length === 0) return
+        shotHideTimer.stop()
+        shotOpenProc.command = ["bash", "-c", "command -v satty >/dev/null 2>&1 && setsid satty --filename \"$0\" --output-filename \"$0\" --app-id com.gabm.satty >/dev/null 2>&1 < /dev/null &", fp]
+        shotOpenProc.running = true
+        shotHideTimer.interval = notifScope.shotTimeoutMs > 0 ? notifScope.shotTimeoutMs : 6000
+        shotHideTimer.restart()
+    }
 
     // Close-button cookie ring: outline samples of MaterialShapes
     // Cookie9Sided (sampled from the M3Shapes plugin at implicitSize 100,
@@ -337,7 +489,7 @@ Scope {
         property real cachedHeight: 0
         readonly property bool isCritical: delegateRoot.cachedUrgency === NotificationUrgency.Critical
         implicitHeight: delegateRoot.isDismissing && cachedHeight > 0 ? cachedHeight : inner.implicitHeight + 26
-        color: isCritical ? Theme.error_container : (Theme.bg)
+        color: isCritical ? Theme.error_container : Theme.panelWindowBg
         Connections {
             target: delegateRoot
             function onIsDismissingChanged() {
@@ -427,7 +579,7 @@ Scope {
                     radius: width / 2
                     antialiasing: Theme.shapesAa
                     clip: true
-                    color: card.isCritical ? Theme.withAlpha(Theme.on_error_container, 0.16) : Theme.surface_container_highest
+                    color: card.isCritical ? Theme.withAlpha(Theme.on_error_container, 0.16) : Theme.panelCardHighest
                     readonly property string slotSource: {
                         if (delegateRoot.cachedImage !== "") return delegateRoot.cachedImage
                         let ic = delegateRoot.cachedAppIcon
@@ -749,23 +901,276 @@ Scope {
                 id: listCol
                 width: notifScope.cardWidth
                 x: notifScope.notifLeft
-                    ? notifScope.edgeGap + (notifScope.barPos === "left" ? notifScope.barT : 0)
+                    ? notifScope.edgeGap
                     : notifScope.notifCenter
                     ? (parent.width - notifScope.cardWidth) / 2
-                    : parent.width - notifScope.cardWidth - notifScope.edgeGap - (notifScope.barPos === "right" ? notifScope.barT : 0)
+                    : parent.width - notifScope.cardWidth - notifScope.edgeGap
                 y: notifScope.notifTop
-                    ? notifScope.edgeGap + (notifScope.barPos === "top" ? notifScope.barT : 0)
-                    : parent.height - height - notifScope.edgeGap - (notifScope.barPos === "bottom" ? notifScope.barT : 0)
+                    ? notifScope.edgeGap + notifScope.barT
+                    : parent.height - height - notifScope.edgeGap
                 spacing: 8
 
 
                 Repeater {
-                    model: notifScope.notifServer ? notifScope.notifServer.trackedNotifications : []
+                    // PERF: only the visible output instantiates toast cards.
+                    // Without the visibility gate every screen built a full
+                    // card tree (shapes, timers, animations) per notification.
+                    // Screenshot toasts render in the dedicated bottom-right
+                    // preview card below, so they are filtered out here.
+                    model: win.visible && notifScope.notifServer
+                        ? notifScope.genericModel : []
                     delegate: NotifCard {
                         listWidth: listCol.width
                     }
                 }
 
+            }
+        }
+    }
+
+    // ---- Screenshot preview toast: bottom-right, always ----
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: shotWin
+            required property var modelData
+            screen: modelData
+            visible: modelData.name === (notifScope.targetScreen ? notifScope.targetScreen.name : Theme.primaryScreenName)
+
+            exclusiveZone: 0
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.namespace: "screenshot-toast"
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            color: "transparent"
+
+            anchors { top: true; left: true; right: true; bottom: true }
+
+            mask: Region { item: shotCol }
+
+            Column {
+                id: shotCol
+                width: 240
+                x: parent.width - width - 16
+                y: parent.height - height - 16
+                spacing: 8
+
+                Item {
+                    id: shotWrapper
+                    width: 240
+                    height: visible ? 266 : 0
+                    visible: notifScope.shotVisible && notifScope.activeShot !== null && shotWin.visible
+                    clip: true
+                    opacity: shotMotion.opacity
+                    scale: shotMotion.scale
+                    transformOrigin: Item.BottomRight
+                    transform: Translate { x: (1 - shotMotion.opacity) * 28; y: (1 - shotMotion.opacity) * 14 }
+
+                    Ui.Motion {
+                        id: shotMotion
+                        active: notifScope.shotVisible && notifScope.activeShot !== null
+                        pattern: Ui.Motion.FadeThrough
+                    }
+
+                    // M3 Expressive cluster: the preview and the actions float
+                    // as separate shapes with a gap between them. The preview
+                    // rounding follows the system rounding slider
+                    // (Settings > Global > Rounding); the pill and the circle
+                    // are fully rounded by definition.
+                    Item {
+                        id: shotCard
+                        anchors.fill: parent
+
+                        Column {
+                            anchors.fill: parent
+                            spacing: 10
+
+                            // Preview image, cropped to fit.
+                            Rectangle {
+                                width: parent.width
+                                height: 200
+                                radius: Theme.cornerRadius
+                                color: Theme.panelCardHigh
+                                antialiasing: Theme.shapesAa
+                                clip: true
+
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    shadowEnabled: true
+                                    shadowColor: Theme.withAlpha(Theme.scrim, 0.5)
+                                    shadowBlur: 0.9
+                                    shadowOpacity: 0.4
+                                    shadowVerticalOffset: 8
+                                }
+                                Image {
+                                    anchors.fill: parent
+                                    source: notifScope.shotImageSource
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    cache: true
+                                    smooth: true
+                                    visible: notifScope.shotImageSource !== "" && status !== Image.Error
+                                }
+                                // Fallback glyph while the file is flushing to
+                                // disk or the path is missing.
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: notifScope.shotImageSource === ""
+                                    text: "󰹑"
+                                    color: Theme.textMuted
+                                    font.family: Theme.iconFontFamily
+                                    font.pixelSize: Theme.fs(44)
+                                    antialiasing: Theme.textAa
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: shotHideTimer.stop()
+                                    onReleased: {
+                                        shotHideTimer.interval = notifScope.shotTimeoutMs > 0 ? notifScope.shotTimeoutMs : 6000
+                                        shotHideTimer.restart()
+                                    }
+                                    onClicked: notifScope.shotOpenFile()
+                                }
+                            }
+
+                            // Bottom row: action pill (Save + X) with the Edit
+                            // button as a separate circle beside it.
+                            Row {
+                                width: parent.width
+                                height: 56
+                                spacing: 8
+
+                                // Action pill: fully rounded secondary-container.
+                                Rectangle {
+                                    width: parent.width - 64
+                                    height: 56
+                                    radius: 28
+                                    color: Theme.secondary_container
+                                    antialiasing: Theme.shapesAa
+
+                                    layer.enabled: true
+                                    layer.effect: MultiEffect {
+                                        shadowEnabled: true
+                                        shadowColor: Theme.withAlpha(Theme.scrim, 0.5)
+                                        shadowBlur: 0.9
+                                        shadowOpacity: 0.35
+                                        shadowVerticalOffset: 6
+                                    }
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        spacing: 4
+
+                                        // Save: filled expressive button (icon + label).
+                                        Rectangle {
+                                            id: saveBtn
+                                            Layout.alignment: Qt.AlignVCenter
+                                            Layout.preferredWidth: saveContent.implicitWidth + 30
+                                            Layout.preferredHeight: 40
+                                            radius: 20
+                                            color: Theme.accent
+                                            antialiasing: Theme.shapesAa
+
+                                            Row {
+                                                id: saveContent
+                                                anchors.centerIn: parent
+                                                spacing: 8
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: "󰆓"
+                                                    color: Theme.onAccent
+                                                    font.family: Theme.iconFontFamily
+                                                    font.pixelSize: Theme.fs(18)
+                                                    antialiasing: Theme.textAa
+                                                    renderType: Theme.textRenderType
+                                                }
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: "Save"
+                                                    color: Theme.onAccent
+                                                    font.family: Theme.fontFamily
+                                                    font.pixelSize: Theme.fs(14)
+                                                    font.weight: Font.DemiBold
+                                                    antialiasing: Theme.textAa
+                                                    renderType: Theme.textRenderType
+                                                }
+                                            }
+                                            Ui.StateLayer {
+                                                radius: 20
+                                                color: Theme.onAccent
+                                                onClicked: notifScope.shotSave()
+                                            }
+                                        }
+
+                                        Item {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 1
+                                        }
+
+                                        // X: expressive icon button inside the pill.
+                                        Item {
+                                            Layout.preferredWidth: 44
+                                            Layout.preferredHeight: 44
+                                            Layout.alignment: Qt.AlignVCenter
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "󰅖"
+                                                color: Theme.on_secondary_container
+                                                font.family: Theme.iconFontFamily
+                                                font.pixelSize: Theme.fs(18)
+                                                antialiasing: Theme.textAa
+                                                renderType: Theme.textRenderType
+                                            }
+                                            Ui.StateLayer {
+                                                radius: 22
+                                                color: Theme.on_secondary_container
+                                                onClicked: notifScope.dismissShot(false)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Edit: separate circle beside the pill.
+                                Rectangle {
+                                    width: 56
+                                    height: 56
+                                    radius: 28
+                                    color: Theme.secondary_container
+                                    antialiasing: Theme.shapesAa
+
+                                    layer.enabled: true
+                                    layer.effect: MultiEffect {
+                                        shadowEnabled: true
+                                        shadowColor: Theme.withAlpha(Theme.scrim, 0.5)
+                                        shadowBlur: 0.9
+                                        shadowOpacity: 0.35
+                                        shadowVerticalOffset: 6
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "󰏫"
+                                        color: Theme.on_secondary_container
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.fs(20)
+                                        antialiasing: Theme.textAa
+                                        renderType: Theme.textRenderType
+                                    }
+                                    Ui.StateLayer {
+                                        radius: 28
+                                        color: Theme.on_secondary_container
+                                        onClicked: notifScope.shotEdit()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

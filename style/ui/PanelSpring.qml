@@ -19,7 +19,7 @@
 // onFinished. With animations off everything snaps instantly.
 //
 // Property names are the long-standing call-site contract (PanelShell,
-// CalendarPanel, SystemTrayPanel, ControlCenterPanel all bind
+// NotificationCenterPanel, SystemTrayPanel, ControlCenterPanel all bind
 // visible/opacity/scale/Translate to boxVisible/fade/zoom/slideX/slideY).
 pragma ComponentBehavior: Bound
 import QtQuick

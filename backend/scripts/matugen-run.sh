@@ -6,7 +6,7 @@
 # Speed design (wallpaper path is latency-critical, ~0.2s core vs ~3s papirus):
 #   1. builds a filtered copy of ~/.config/matugen/config.toml with mktemp
 #      (drops disabled template blocks; drops unknown user blocks when
-#      runUserTemplates=false; never drops quickshell/umbriel core blocks)
+#      runUserTemplates=false; never drops quickshell/hyprland core blocks)
 #   2. runs ONE synchronous `matugen -c <filtered> "$@"` WITHOUT the papirus
 #      block (papirus icon regeneration is ~90% of the runtime) so the shell
 #      recolors in ~0.3-0.5s.
@@ -32,6 +32,16 @@ fi
 SYNC_CFG="$(mktemp /tmp/solstice-matugen-sync.XXXXXX.toml)"
 PAPIRUS_CFG="$(mktemp /tmp/solstice-matugen-papirus.XXXXXX.toml)"
 KITTY_CFG="$(mktemp /tmp/solstice-matugen-kitty.XXXXXX.toml)"
+# STABILITY: the sync config is only needed by the foreground run; clean it up
+# on every exit path (SIGTERM from a cancelled theme apply included). The
+# deferred replays own their configs — they must survive this script's exit.
+cleanup_sync_cfg() { rm -f "$SYNC_CFG"; }
+trap cleanup_sync_cfg EXIT
+
+# Serialize deferred replays: two theme applies racing here would run matugen
+# concurrently and an older run could overwrite the newer theme outputs.
+LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}/solstice-matugen"
+mkdir -p "$LOCK_DIR" 2>/dev/null || LOCK_DIR=/tmp
 
 # Detect requested mode from CLI (ThemeEngine always passes -m <mode>).
 MODE_IS_LIGHT=false
@@ -77,14 +87,14 @@ if off("templateVesktop"): drop.update(["vesktop-midnight", "vesktop-system24"])
 if off("templateObs"): drop.update(["obs", "obs-native"])
 if off("templateOpencode"): drop.add("opencode")
 if off("templatePapirus"): drop.add("papirus")
+if off("templatePinta"): drop.add("pinta")
 if off("templatePrismlauncher"): drop.add("prismlauncher")
-if off("templateHelium"): drop.add("helium")
 
-known = {"quickshell", "umbriel", "gtk3", "gtk4", "qt5ct", "qt6ct",
+known = {"quickshell", "hyprland", "gtk3", "gtk4", "qt5ct", "qt6ct",
          "qt-colorscheme", "kitty", "ghostty", "fcitx5", "firefox",
          "vscode-raw", "vscode-json", "neovim", "btop", "vesktop-midnight",
-         "vesktop-system24", "obs", "obs-native", "opencode", "papirus",
-         "prismlauncher", "helium"}
+          "vesktop-system24", "obs", "obs-native", "opencode", "papirus",
+          "pinta", "prismlauncher"}
 run_user = t.get("runUserTemplates", True) is not False
 
 def split_blocks(text):
@@ -181,21 +191,24 @@ dark_args() {
   printf '%s\0' "${out[@]}"
 }
 
-"$MATUGEN_BIN" -c "$SYNC_CFG" "${CALL_ARGS[@]}"
+# STABILITY: bounded foreground run — a hung template/post_hook must not wedge
+# the shell's theme-apply process forever.
+timeout "${SOLSTICE_MATUGEN_TIMEOUT:-60}" "$MATUGEN_BIN" -c "$SYNC_CFG" "${CALL_ARGS[@]}"
 CODE=$?
 rm -f "$SYNC_CFG"
 
 # Detached replays: redirect everything off the caller's stdout pipe so the
 # foreground caller returns as soon as the fast sync run is done. Each job
-# cleans up its own temp config.
+# cleans up its own temp config and holds a lock so concurrent applies are
+# serialized (last one wins, no interleaved writes).
 if [ "${DEFER_PAPIRUS:-0}" = "1" ]; then
-  ( "$MATUGEN_BIN" -c "$PAPIRUS_CFG" "${CALL_ARGS[@]}" 2>&1 | logger -t matugen-papirus 2>/dev/null; rm -f "$PAPIRUS_CFG" ) >/dev/null 2>&1 < /dev/null & disown || true
+  ( flock -w 60 9 || exit 0; "$MATUGEN_BIN" -c "$PAPIRUS_CFG" "${CALL_ARGS[@]}" 2>&1 | logger -t matugen-papirus 2>/dev/null; rm -f "$PAPIRUS_CFG" ) 9>"$LOCK_DIR/papirus.lock" >/dev/null 2>&1 < /dev/null & disown || true
 else
   rm -f "$PAPIRUS_CFG"
 fi
 if [ "${KITTY_DARK:-0}" = "1" ]; then
   mapfile -d '' -t DARK_ARGS < <(dark_args "${CALL_ARGS[@]}")
-  ( "$MATUGEN_BIN" -c "$KITTY_CFG" "${DARK_ARGS[@]}" 2>&1 | logger -t matugen-terminals 2>/dev/null; rm -f "$KITTY_CFG" ) >/dev/null 2>&1 < /dev/null & disown || true
+  ( flock -w 60 9 || exit 0; "$MATUGEN_BIN" -c "$KITTY_CFG" "${DARK_ARGS[@]}" 2>&1 | logger -t matugen-terminals 2>/dev/null; rm -f "$KITTY_CFG" ) 9>"$LOCK_DIR/kitty.lock" >/dev/null 2>&1 < /dev/null & disown || true
 else
   rm -f "$KITTY_CFG"
 fi

@@ -58,8 +58,6 @@ Scope {
         }
     }
     onBehindChanged: if (behind) editing = false
-
-    readonly property string barPos: Theme.barPosition
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
 
     // Hidden tiles persist in backend/config/controlcenter.json (hiddenTiles array)
@@ -310,12 +308,33 @@ Scope {
     }
     // Publish where a drill-in was clicked from (window coordinates): the
     // incoming panel morphs out of that rect and back into it (style/ui/PanelMorph
-    // overlay run).
-    function publishOriginFor(targetId: string, item: var): void {
+    // overlay run). `source` is the container-transform descriptor
+    // ({ component, props }) rendered by the incoming panel as a replica of
+    // the tile/button (see PanelShell.morphReplica).
+    function publishOriginFor(targetId: string, item: var, source: var): void {
         if (!item)
             return
         let p = item.mapToItem(null, 0, 0)
-        PanelMorph.publishOrigin(targetId, Qt.rect(p.x, p.y, item.width, item.height))
+        PanelMorph.publishOrigin(targetId, Qt.rect(p.x, p.y, item.width, item.height), source)
+    }
+    // Container-transform replica of a tile: the same QuickToggle the grid
+    // renders, keyed by tile id (set by the incoming panel from the
+    // published props).
+    Component {
+        id: tileMorphSource
+        QuickToggle {
+            property string tileId: ""
+            compact: scope.tileCols(tileId) === 1
+            glyph: scope.tileGlyph(tileId)
+            title: scope.tileTitle(tileId)
+            status: scope.tileStatus(tileId)
+            active: scope.tileActive(tileId)
+        }
+    }
+    // Container-transform replica of the audio chevron button.
+    Component {
+        id: audioMorphSource
+        AudioMenuButton { }
     }
     // Panel id a tile opens as a drill-in ("" for tiles that act in place).
     // Keys the source-button visibility against PanelMorph.originId.
@@ -329,14 +348,14 @@ Scope {
         // Tile opens the bluetooth menu (Android QS style); power lives on
         // the switch inside the drill-in and on bar middle/right-click.
         else if (id === "bluetooth") {
-            scope.publishOriginFor("bluetoothmenu", item)
+            scope.publishOriginFor("bluetoothmenu", item, { component: tileMorphSource, props: { tileId: id } })
             scope.bluetoothRequested()
         }
         else if (id === "dnd") Theme.toggleDnd()
         // Update tile opens the update center as its own drill-in panel
         // (shell.qml panel.updatesMenu), same as bluetooth/audio.
         else if (id === "updates") {
-            scope.publishOriginFor("updatesmenu", item)
+            scope.publishOriginFor("updatesmenu", item, { component: tileMorphSource, props: { tileId: id } })
             scope.updatesRequested()
         }
     }
@@ -469,7 +488,11 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "controlcenterpanel"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
 
             Item {
                 anchors.fill: parent
@@ -497,7 +520,6 @@ Scope {
             PanelShell {
                 moduleId: "controlcenter"
                 screenActive: Theme.isPrimaryScreen(modelData)
-                barPos: scope.barPos
                 panelGap: scope.panelGap
                 shown: scope.popped
                 boxWidth: 360
@@ -1184,46 +1206,22 @@ Scope {
                 }
 
                 // Audio drill-in: the chevron opens the audio panel, which
-                // morphs out of this card and back into it (shell.qml
-                // panel.audio). Same height as the slider row.
-                Rectangle {
+                // morphs out of this button and back into it (shell.qml
+                // panel.audio). Same height as the slider row. The button
+                // itself is a shared component (AudioMenuButton) so the
+                // incoming panel can render the identical replica
+                // (tileMorphSource-style container transform).
+                AudioMenuButton {
                     id: audioMenuButton
                     Layout.alignment: Qt.AlignVCenter
-                    implicitWidth: 48
-                    implicitHeight: 48
-                    radius: height / 2
-                    antialiasing: Theme.shapesAa
-                    color: Theme.surface_container_highest
-                    scale: audioMenuButtonMouse.pressed ? Theme.pressScale : 1
+                    interactive: !scope.editing
                     // Hidden while the audio drill-in is open; reappears as
                     // the card dissolves back into it (PanelMorph).
                     opacity: PanelMorph.originId === "audio" ? PanelMorph.sourceReveal : 1
                     enabled: opacity > 0.5
-
-                    Behavior on scale {
-                        enabled: Theme.animationsEnabled
-                        NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "󰅀"
-                        font.family: Theme.iconFontFamily
-                        font.pixelSize: Theme.fs(22)
-                        color: Theme.textPrimary
-                        antialiasing: Theme.textAa
-                        renderType: Theme.textRenderType
-                    }
-
-                    StateLayer {
-                        id: audioMenuButtonMouse
-                        radius: Math.round(width / 2)
-                        color: Theme.textPrimary
-                        disabled: scope.editing
-                        onClicked: {
-                            scope.publishOriginFor("audio", audioMenuButton)
-                            scope.audioRequested()
-                        }
+                    onClicked: {
+                        scope.publishOriginFor("audio", audioMenuButton, { component: audioMorphSource })
+                        scope.audioRequested()
                     }
                 }
             }

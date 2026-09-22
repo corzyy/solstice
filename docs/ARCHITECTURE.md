@@ -32,8 +32,8 @@ solstice/
 │   │                         BarModule (delegate host) + BarWidgetBase + BarSlot
 │   │
 │   ├── panels/            — popout panels (`import "./shell/panels" as Panels`)
-│   │   ├── CalendarPanel.qml  — calendar + notification history (was CalendarMenu)
-│   │   ├── CalendarModel.js
+│   │   ├── NotificationCenterPanel.qml  — notification history (was CalendarPanel;
+│   │   │                                    calendar UI removed)
 │   │   ├── LauncherPanel.qml  — app search popup (bar OS icon / SUPER+SPACE)
 │   │   ├── PowerPanel.qml     — Android-style power menu (standalone modal:
 │   │   │                         dimmed + compositor-blurred backdrop, centred
@@ -59,7 +59,7 @@ solstice/
 │   │                                 sub-views), Network, Connected Devices
 │   │                                 (Bluetooth: saved devices, pairing and
 │   │                                 per-device sub-views),
-│   │                                 Global, Umbriel, Audio,
+│   │                                 Global, Hyprland, Audio,
 │   │                                 Apps (default applications; library:
 │   │                                 All apps with a shared detail page +
 │   │                                 App Theming),
@@ -74,7 +74,7 @@ solstice/
 │       │                         card, merge-morphs out of the power menu card
 │       │                         (always mapped, input-masked while unlocked)
 │       ├── Notifications.qml (toast shell), Polkit.qml (agent),
-│       ├── VolumeOSD.qml      — OSD card: volume + Umbriel layout switches + theme applies
+│       ├── VolumeOSD.qml      — OSD card: volume + keyboard-layout switches + theme applies
 │       ├── DebugOverlay.qml   — opt-in FPS readout (Experimental page; debug.json)
 │       └── ScreenshotUI.qml   — bottom pill: region / window / fullscreen capture
 │                                   (PRINT; backend/scripts/screenshot.sh)
@@ -94,16 +94,16 @@ solstice/
 │   │   ├── WallpaperService.qml — wallpaper scan, swaybg display switch, recent
 │   │   │                         ring (backend/config/recent_wallpapers.json); used
 │   │   │                         by the Settings Wallpaper & style page
-│   │   ├── VitalsService.qml,
 │   │   ├── SettingsService.qml — backend/config/settings.json persistence + apply scripts
 │   │   ├── SettingsRegistry.qml — settings nav/page registry (nav rail + launcher search entries)
 │   │   ├── I18n.qml           — shell language (JS dictionaries, en/de) + format
 │   │   │                         region (QLocale for date/number labels);
 │   │   │                         backend/config/language.json
-│   │   └── UmbrielService.qml  — Umbriel (niri) integration
+│   │   └── HyprlandService.qml     — Hyprland integration (IPC workspaces/toplevels,
+   │   │                         compositor appearance settings)
 │   │
 │   ├── config/            — canonical user settings & state (FileView watchers)
-│   │   ├── topbar_settings.json, controlcenter.json, vitals.json,
+│   │   ├── topbar_settings.json, controlcenter.json,
 │   │   │   bar_layout.json, bar_labels.json, bar_backgrounds.json, tray.json,
 │   │   │   notifications.json,
 │   │   │   calendar.json, dnd.json, gamemode.json, font_settings.json,
@@ -113,7 +113,7 @@ solstice/
 │   │
 │   └── scripts/           — shell scripts + python appliers (solstice CLI,
 │                             update/update-shell, theming-apply, matugen-themes,
-│                             umbriel-apply, settings-apply, volume.sh,
+│                             hyprland-apply, settings-apply, volume.sh,
 │                             screenshot.sh, …)
 │
 ├── style/                 — design system (shell.qml: `"./style/themes"`,
@@ -149,7 +149,7 @@ There is no root `qs` module. Singletons are registered per-directory via local
   → `HistoryService`, `UpdateService`, `NetworkService`, …
 - `import "./style/ui"` / `"../style/ui"` → `BarAnchor`, `PanelShell`, `MSlider`, `Util`, `Ui.Motion`, …
 - `import "./shell/bar" as Bar` → `Bar.TopBar`; `import "./widgets" as Bar` inside TopBar
-- `import "./shell/panels" as Panels` → `Panels.CalendarPanel`, …
+- `import "./shell/panels" as Panels` → `Panels.NotificationCenterPanel`, …
 - `import "./shell/panels/controlcenter" as Cc`, `"./shell/panels/settings" as Settings`,
   `"./shell/overlays" as Overlays` → `Overlays.Lockscreen`, …
 
@@ -180,16 +180,34 @@ Rules learned the hard way:
   back/close (`CaelestiaPopout._tryMorphBack`). The card settles
   `Theme.panelDrillInInset` below the CC anchor (`PanelShell.edgeInset`), so
   the CC header + first tile row stay visible above it.
+- The morph is a container transform: the CC publishes the clicked tile/button
+  as a source descriptor (`{ component, props }`, the same QuickToggle /
+  AudioMenuButton component the CC renders) alongside the origin rect
+  (`PanelMorph.publishOrigin`). The incoming panel claims it
+  (`CaelestiaPopout._morphSource`) and `PanelShell` renders it as a replica
+  at card-local (0,0) — the card's top-left starts exactly on the origin rect —
+  morphing it into the page header (`PanelShell.morphTarget`) while the card
+  grows to its settled pose. The page content follows behind the replica and
+  crossfades in over the tail of the open run
+  (`CaelestiaPopout._overlayContent`, `Theme.panelMorphReplicaDelay/Fade`);
+  the return drops the content immediately and lets the same replica carry
+  the collapse back into the button.
 - The origin button itself hides the moment the card renders at its pose
   (`PanelMorph.originId` + `sourceReveal`, set by CaelestiaPopout.morphFrame)
   and crossfades back as the return run dissolves the card into it; the CC
   reads `sourceReveal` for the tile/audio-button opacity.
-- Both directions run a container transform: the content layout scales with
-  the frame (`CaelestiaPopout.contentShrink` × `contentScale` in PanelShell,
-  TopLeft origin), so the panel is a miniature of itself while it grows out
-  of / collapses into the button. The return is driven on the wall clock
-  (`morphBackFadeAnim`: solid for 40%, then a soft 60% dissolve) so the
-  shrink stays visible instead of vanishing inside the curve's fast start.
+- Both directions run a container transform: the replica morphs from/to the
+  button pose while the card follows (`CaelestiaPopout._morphT`), and the
+  content scale/offset ride `contentScale`/`contentOffset*`. The return fade
+  (`_backFade`) is keyed to the spatial progress, so the card stays solid
+  while it travels and dissolves over the last tenth of the distance, where
+  the replica is within a few pixels of the origin button.
+- Interrupted runs never snap: a popout switched away or dismissed while its
+  card is still gliding in freezes at its current pose (the successor claims
+  that same rect) and dissolves in place (`_inFade` -> `_resetInterruptedIn`
+  releases the frozen geometry only once it is invisible); a re-targeted
+  switch takes the frozen card over again, and a return re-opened mid-collapse
+  resumes from the card's current pose (`_tryMorphIn.wasBack`).
 - Name → enum maps (`panelForName`, `panelForModule`) are the single source for IPC
   names and bar module ids (settings excluded — it is not part of the exclusive state).
 
@@ -210,8 +228,10 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
 - Bar exclusiveZone only on the selected taskbar monitor; all shell surfaces use
   `Theme.isPrimaryScreen(modelData)` (selection = `monitor` in
   `config/topbar_settings.json`, empty → DP-1-first fallback).
-- Every panel body: `Flickable { clip: true; boundsBehavior: StopAtBounds;
-  contentHeight: col.implicitHeight }`.
+- Every panel body: `Flickable { clip: true; boundsBehavior:
+  DragAndOvershootBounds; contentHeight: col.implicitHeight }` plus an
+  `OverscrollSpring { flick: ... }` sibling (snapped carousels keep
+  `StopAtBounds` so the snap never fights the bounce).
 
 ## History
 - 2026-09-01/02: ControlCenter/CalendarPanel/SolsticeMenu split into sections; dead
@@ -239,7 +259,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   `services/WeatherService.qml` + `WeatherModel.js` (+ qmldir), settings nav/page,
   IPC (`toggle/show/hideWeather`), panel enum/morph maps, Theme layout defaults
   and migration, `config/weather.json`, `scripts/solstice` module case, and the
-  Umbriel layer-rule namespace; PanelSpring's unused `offset` shim and
+  old compositor layer-rule namespace; PanelSpring's unused `offset` shim and
   TogglePill's `offBgAlpha` knob (only the weather pill used them) were dropped.
 - 2026-09-18 (later): bar modules Network, Bluetooth, Volume, Updates and Vitals
   removed end to end — bar widgets (`StatusWidgets`, `VolumeWidget`,
@@ -289,11 +309,14 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   (activeTrail), displayType shapes/text/icons with active/occupied/label
   glyphs + capitalisation, per-workspace window icons (maxWindowIcons) with
   the app-icon resolver, per-monitor filtering and a `shown` group window
-  around the active workspace. Umbriel adaptations: ui ordinals are
-  synthesised when the group window reaches beyond existing workspaces,
-  window ids map back to ordinals via `UmbrielService.ordinalFor`, horizontal
-  bars put window icons next to the shape (vertical bars stack them below),
-  and special workspaces/blur are not ported (no Umbriel equivalent).
+  around the active workspace. Hyprland adaptations: the model follows Hyprland's
+  workspace list (real workspaces only — no synthesised slots; one
+  clickable fallback slot when an output briefly has none; gap markers when
+  an index in between is missing; "Show unoccupied" narrows the list to
+  occupied/active/urgent). Windows carry their resolved workspace index from
+  `HyprlandService`, horizontal bars put window icons next to the shape (vertical
+  bars stack them below), and the scratchpad is toggled by keybind instead of
+  a dedicated overview.
    Settings: bar.workspaces options from Caelestia Nexus BarWorkspaces in
    WorkspacesSettings.qml, shared by Settings → Workspaces and Taskbar →
    Workspaces. New Theme keys live in config/topbar_settings.json
@@ -398,9 +421,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
 - 2026-09-19 (later): Power menu added as a standalone Android-style modal
    (`panels/PowerPanel.qml`), deliberately NOT a CC drill-in (no morph, no
    anchor, no back header): full-screen overlay with a scrim-dimmed backdrop
-   (compositor layer blur via the always-on `powerpanel` namespace rule in
-   `~/.config/umbriel/configs/rules.toml`, kept out of the shell namespace
-   group so the opaque-shell `blur = false` override can't disable it) and a
+   (compositor layer backdrop via the always-on `powerpanel` namespace) and a
    centred card with Lock/Logout/Restart/Shutdown. Buttons are M3Shapes
    MaterialShapes: idle circle, hover morphs into a random expressive shape
    (re-rolled per hover; pool: Square, Slanted, Pill, Pentagon, Gem, Sunny,
@@ -410,11 +431,11 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    button (`ControlCenterPanel.powerRequested` → `toggleExclusive`), the
    `solstice` CLI (`scripts/solstice` gained the `power` module: `solstice module power
    toggle`, bound to SUPER+ESCAPE in
-   ~/.config/umbriel/configs/keybinds-user.toml) and the raw
+   ~/.config/hypr/configs/binds/user.lua) and the raw
    `togglePower/showPower/hidePower` IPC; enum slot 9, `panelForName.power`;
    closed by backdrop click, Escape, an action or the IPC.    Lock routes to the
    lockscreen overlay (`Overlays.Lockscreen` gained `id: lockscreen`), logout
-   uses `umbriel msg session-quit:skip-confirmation` with a
+   uses `hyprctl dispatch exit` with a
    `loginctl terminate-session` fallback, restart/shutdown use systemd.
    The button visual lives in `ui/PowerAction.qml` (registered in ui/qmldir),
    shared with the lockscreen merge replica.
@@ -479,19 +500,15 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
   invoked with stdin from /dev/null: slurp 1.5+ reads boxes from stdin when
   it is a pipe, and Quickshell hands children an unread stdin pipe, so
   slurp blocked in read(0) and never mapped its selection overlay — region
-  mode looked dead until that redirect. Then grim's
-  full desktop (fullscreen) or grim -g on the picked window: window mode
-  maps a full-screen picker (`screenshotpicker` namespace, all screens,
-  `exclusionMode: Ignore` so it spans the bar's exclusive zone) that dims
-  the desktop and highlights the window under the pointer via
-  `UmbrielService.windowGeometries`/`windowGeometryAt` (windows on hidden
-  workspaces excluded). The scrim is an odd-even filled Shape with a hole
-  over the top bar, so the bar stays fully visible while picking, and the
-  hovered program indicator is a pill the picker draws over the bar
-  (z-above it) on the screen that owns the window; releasing the mouse over
-  a window captures it, Escape/right click cancels. Saves to `~/Pictures/Screenshots`, copies to
-  the clipboard and notifies. IPC: `solstice toggleScreenshot/showScreenshot/
-  hideScreenshot` + target `screenshot` (mode/capture/pickAt/status).
+  mode looked dead until that redirect. Then grim grabs the
+  full desktop (fullscreen), while window mode grabs the focused window by
+  geometry: `scripts/screenshot.sh` resolves it through
+  `hyprctl activewindow -j` (Hyprland's IPC exposes absolute window
+  coordinates) and captures the rect with `grim -g`, falling back to the
+  full desktop when there is no active window. Saves to
+  `~/Pictures/Screenshots`, copies to the clipboard and notifies. IPC:
+  `solstice toggleScreenshot/showScreenshot/hideScreenshot` + target
+  `screenshot` (mode/capture/status).
 - 2026-09-19 (later): Screenshot UI settings page added (Settings > Panels >
    Screenshot UI, `panels/settings/pages/ScreenshotSettings.qml`, registered
    as a `panels` entry in PanelsPage): default mode (the pill resets to it on
@@ -531,48 +548,49 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    reload) — the action strings are the `spawn:solstice …` commands from
    `scripts/solstice`, so "all possible keybindings" means every shell capability,
    bound or not, rather than only the currently-bound chords. Each row shows the effective
-   Umbriel chord (or "Not bound") and rebinds by click: capture mode enables a
+   Hyprland chord (or "Not bound") and rebinds by click: capture mode enables a
    `ShortcutInhibitor` on the settings `FloatingWindow` (passed down as
    `SetupPage.hostWindow` from `SettingsPanel`'s `setupComp`) so the
    compositor doesn't consume the chord being recorded; Qt key events map to
-   XKB keysym names (letters/digits, shifted symbols back to the base key,
+   Hyprland key names (letters/digits, shifted symbols back to the base key,
    F-keys, nav/edit keys, media/XF86 keys), Escape cancels, auto-repeat is
-   ignored, a single modifier tap records a modifier-only bind ("Mod"). While
-   the compositor lacks `zwp_keyboard_shortcuts_inhibit_manager_v1` (not in
-   the installed Umbriel build; Quickshell logs a warning) capture still sees
-   every chord the compositor doesn't already bind. `scripts/umbriel-keybinds.py`
-   was extended with `list --json`, `set <action> <chord> [--file <keybinds-*.toml>] [--json]`
-   and `unbind <action> [--file <keybinds-*.toml>] [--json]`. The editor
-   rewrites only the quoted chord on the matching line of the target file —
-   `~/.config/umbriel/configs/keybinds-user.toml` by default, or the file the
-   bind currently comes from (see the Compositor entry below). Comments and
-   table-form options survive; a chord owned by another bind is disabled with
-   a `# solstice-off:` prefix, which `set` reuses/uncomments; an
-   action bound in another include is reported via `stale`, a same-chord bind
-   in an earlier file via `overrides`, and in a later file via `shadowedBy`;
-   the script then runs `umbriel msg config-reload`. Editing the hand-written
-   user file is deliberate: Umbriel has no unbind action, so a shell.toml
-   override would leave the old chord active alongside the new one.
+   ignored, a single modifier tap records a modifier-only bind ("SUPER"). While
+   the compositor lacks `zwp_keyboard_shortcuts_inhibit_manager_v1` (Quickshell
+   logs a warning) capture still sees every chord the compositor doesn't
+   already bind. `scripts/hyprland-keybinds.py` provides
+   `list --json`, `set <action> <chord> [--file <binds-*.lua>] [--json]`
+   and `unbind <action> [--file <binds-*.lua>] [--json]`. The editor
+   rewrites the bind's line in the target file —
+   `~/.config/hypr/configs/binds/user.lua` by default, or the file the
+   bind currently comes from (see the Compositor entry below). Comments
+   survive; a chord owned by another bind is commented out with a `--`
+   prefix; an action bound in another file is reported via
+   `stale`, a same-chord bind in the system file via `overrides`, and in the
+   user file via `shadowedBy`; the script then runs
+   `hyprctl reload`. Editing the hand-written user file is
+   deliberate: Hyprland has no unbind dispatcher, so a managed override would leave
+   the old chord active alongside the new one.
 - 2026-09-19 (later): Setup gained the Compositor keybinds page under the new
    Compositor section (`KeybindsPage` with `scope: "compositor"`, sub-view
    `"compositor"` in `SetupPage.qml`). It lists a curated set of useful
-   Umbriel actions grouped like the compositor cheatsheet: Windows (close,
-   float, fullscreen, maximize, pin, center), Focus & layout (focus/move
-   focus/column, cycle layout), Workspaces (next/previous, move window),
-   Overview & scratchpads, Outputs, Media & brightness (volume / mic /
-   brightness / playerctl), Session (config-reload, cheatsheet, session-quit).
+   Hyprland actions grouped like the compositor cheatsheet: Windows (close,
+   float, fullscreen, maximize), Focus & layout (focus/move window),
+   Workspaces
+   (next/previous, move window), Scratchpad, Outputs,
+   Media & brightness (volume / mic / brightness / playerctl), Session
+   (`hyprctl reload`, quit).
    Everything else in the two keybind files lands in a trailing "Other binds"
    group (help description as label, raw action as subtext, spawn commands
    shortened, `spawn:solstice …` excluded — those are Shell page rows — and a
    `hiddenActions` list for actions deliberately kept off the page, currently
    `spawn:opencode`; hidden binds stay active in the config), so no other bind
    is unreachable from the UI. Rows are keyed by raw action, so parameterized
-   binds (`workspace-switch:1`, `window-modify-width:0.05`, spawn commands)
+   binds (`ws-1`, `dispatch:…`, spawn commands)
    match exactly; an action bound several times shows all chords joined with
    " · ".
    Rebinding targets the file the bind lives in (`editSourceFor` → `--file`),
-   so system binds are renamed in `keybinds-system.toml` and user binds stay
-   in `keybinds-user.toml`; unbound catalog actions are appended to the user
+   so system binds are rebound in `binds/system.lua` and user binds stay
+   in `binds/user.lua`; unbound catalog actions are appended to the user
    file. The list is grouped by a flattened `rowGroups` model (outer Repeater
    per group, inner Repeater per row) because delegates cannot see enclosing
    delegate ids; `rows` carries `first`/`last` flags for the card corners.
@@ -615,7 +633,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    one Setup > Shell > Keybinds page: `KeybindsPage` dropped its `scope`
    selector and always concatenates `shellCatalog` + `compositorCatalog` +
    the "Other binds" sweep, so shell actions stay on top, followed by the
-   Umbriel groups and the remaining compositor binds. `SetupPage` lost the
+   Hyprland groups and the remaining compositor binds. `SetupPage` lost the
    Compositor section, its NavRow and the `"compositor"` sub-view; the shell
    Keybinds row now reads "Shell actions and compositor shortcuts".
 
@@ -696,9 +714,13 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    them on top, available entries are grouped by category below a page filter.
    Clicking install downloads the upstream template into
    `~/.config/matugen/templates`, appends the block (absolute paths, escaped
-   post_hook) and enables the toggle; the page then re-applies the active
-   engine through its ThemeEngine (`monetCurrent` for wallpaper mode or
-   `preset:<engine>`, both silent) so the app output renders immediately.
+   post_hook), runs the entry's optional `install_hook` and enables the
+   toggle; the page then re-applies the active engine through its ThemeEngine
+   (`monetCurrent` for wallpaper mode or `preset:<engine>`, both silent) so
+   the app output renders immediately. The Hyprland entry uses this to keep its
+   generated `~/.config/hypr/configs/colors.lua` wired in: the shell requires
+   `configs/colors` at the end of `hyprland.lua`, and install/post_hook/remove
+   all run `hyprctl reload` so the compositor picks up the new colours live.
    Remove drops the block again (blank separator included, byte-identical
    round trip) and tears down the program side for every entry: the app's
    generated theme file(s) are deleted, optional per-entry `cleanup` paths
@@ -708,7 +730,7 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    best-effort: notify daemons/monitors reload (kitty, ghostty, waybar, mako,
    dunst, swaync, btop with color_theme reset to Default), GTK re-imports
    without colors.css, GNOME resets its user-theme, compositor configs reload
-   (niri/sway/labwc/mango), spicetify/Steam re-apply, and wezterm's empty
+   (hyprland/sway/labwc), spicetify/Steam re-apply, and wezterm's empty
    touched wezterm.lua is dropped; hooks only run when the entry was actually
    installed or left artifacts behind. Re-installing re-renders the theme.
    Manual entries (Zen, Telegram, …) own only the downloaded template in
@@ -740,8 +762,8 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    picking an app calls
    `backend/scripts/apps-manage.py set-default`, which reads the .desktop
    Exec line, rebinds `spawn:<command>` to the chord the previous command
-   held (Mod+Return / Mod+B / Mod+E fallback) through `umbriel-keybinds.py`
-   and lets Umbriel reload — the shortcut changes live; the pick is persisted
+   held (SUPER+Return / SUPER+B / SUPER+E fallback) through `hyprland-keybinds.py`
+   and lets Hyprland reload — the shortcut changes live; the pick is persisted
    in `backend/config/default_apps.json` (`defaults` resolves it back for the
    dropdowns, including the effective chord). "Library > All apps" lists
    every launcher-visible desktop entry in one searchable list; a single
@@ -870,6 +892,113 @@ default; jq '.key //= default' > /tmp/x.json && mv` — never raw echo over exis
    window rect (`onVisibleChanged`) and bar anchors on
    `primaryScreenName` changes, and only the selected screen's bar reserves an
    exclusive zone; popouts keep following `Theme.isPrimaryScreen`.
+
+- 2026-09-20 (later): Control-center drill-ins now run a true container
+   transform instead of scaling a miniature of the page. The clicked tile’s
+   button publishes a source descriptor (`{ component, props }`, the same
+   QuickToggle/AudioMenuButton component the CC renders —
+   `ControlCenterPanel.tileMorphSource`/`audioMorphSource`, the audio chevron
+   extracted to `panels/controlcenter/AudioMenuButton.qml`) with the origin
+   rect; `CaelestiaPopout` claims it into `_morphSource` and `PanelShell`
+   renders the replica at card-local (0,0) — the card’s top-left starts on the
+   origin rect — morphing it into the page header (`morphTarget`: bluetooth
+   `backHeader`, updates `headerItem`, audio `audioHeader`) while the card
+   grows. `_overlayContent` (Theme `panelMorphReplicaDelay`/`ReplicaFade`)
+   crossfades the page content in over the tail of the open and out at the
+   start of the return, so the replica carries the collapse back into the
+   button; `contentShrink` (the miniature scale) is gone. Verified in the
+   headless harness: replica created at 172×72 at the origin, at ~336×41 after
+   150 ms, recreated at 340×40 on the return.
+- 2026-09-20 (later): The container transform was polished after frame-capture
+   review. Overlay opens use `Theme.curvePanelMorphOverlay` (= `curveStandard`,
+   the same even curve as the return) instead of the curtain’s front-loaded
+   `curvePanelOpen`: with the curtain attack the whole tile→panel shape change
+   happened in roughly the first fifth of `durPanelMorph` and read as a snap
+   followed by a long fade. `QuickToggle` gained `_replicaK` (clamped height /
+   72) so the replica’s icon column scales with it and lands on the header’s
+   geometry (title x ≈ 38 next to the back button) instead of keeping
+   tile-sized furniture; real tiles (72/154 tall) keep k = 1. The return fade
+   (`_backFade`) is now keyed to the spatial progress (`_morphT`), not the
+   wall clock: the card stays solid while it travels and dissolves over the
+   last tenth of the distance, where the replica is within a few pixels of the
+   origin rect, so the CC tile (`sourceReveal`) crossfades with it at the same
+   pose instead of ghosting next to it mid-flight; `morphBackFadeAnim`/
+   `_backOpacity` are gone. The replica’s start size is ceil’d like the frame
+   so it covers the card exactly on the takeover frame.
+- 2026-09-20 (later): Morph interruptions no longer snap. A popout switched
+   away while its card was still gliding in used to fall through to the plain
+   close: `_tryMorphOut` refused the handoff (`_morphIn`), `_morphIn` was
+   released and the frame jumped to its settled size for the curtain while the
+   successor glided in from the published mid-pose. `_tryMorphOut` now accepts
+   the interrupted incoming side: it freezes the glide at its current pose
+   (the successor starts from that same rect), holds the card until the
+   incoming surface is up and then dissolves it in place through `_inFade` —
+   a directly animated 1 -> 0, since the holder’s opacity Behavior is disabled
+   during morph-in; `_resetInterruptedIn` releases the frozen geometry only
+   once the card is invisible. Dismissing mid-glide (bar toggle/Escape, no
+   handoff) takes the same dissolve via `dropMorphOut`, and a re-targeted
+   switch takes the frozen card over again (`_tryMorphIn` dropped its
+   `_morphIn` guard). A return re-opened mid-collapse resumes from the card’s
+   current pose instead of snapping back to the origin button (`wasBack`), and
+   the frozen card keeps its content/replica pose while the whole card
+   dissolves (`_contentLeaving`/`contentFade`/`morphReplicaOpacity` exclude
+   the interrupted side).
+
+- 2026-09-20 (later): Compositor performance/stability pass. `HyprlandService`
+   projects the Quickshell Hyprland IPC objects (workspaces/toplevels) into
+   the canonical workspace/window model on a 50 ms debounce fed by raw-event
+   and value-change signals, plus a 30 s safety re-sync; focus-only changes
+   refresh just the active-window identity, so an alt-tab storm stops
+   rebuilding the Workspaces model and rebinding the bar.
+   `Workspaces.collectReal` reads the workspace urgent flag and builds
+   one urgent-index map per pass instead of one `windowsOn()` scan per
+   workspace delegate (`HyprlandService.workspaceUrgent` stays as a helper). The
+   lock screen only assigns its wallpaper `Image` source while locked (it
+   decoded a full-res wallpaper per screen at startup, `cache:false`, even
+   when the user never locks), and a PIN submitted while the previous
+   `lock-auth.sh` run is still in flight is queued instead of being silently
+   dropped. Lock/OSD probes back off properly: `VolumeOSD`'s poll failure
+   counter is actually incremented and reset (the old `fails` property sat at
+   0 forever), `pw-mon` restart backs off and its output is filtered to
+   volume/mute lines (any PipeWire event used to fork `volume.sh` per 70ms),
+   and stale pw-mon/reader noise is kept out of OSD state. `VitalsService`
+   only polls while a consumer is alive (Vitals page acquire/release; the bar
+   no longer shows vitals) — the ~8-fork/2s probe is gone from the steady
+   state. The notifications overlay only instantiates toast cards on the
+   visible output (every screen built a full card tree + timers per
+   notification). `PanelMorph.publish` skips identical rects.
+   An attempted `CaelestiaPopout` shadow optimization (rasterize the layer at
+   the size Behavior's target instead of every frame) was reverted: an
+   empirical qmltest proved a Behavior never publishes its target through the
+   nested animation's `to` (it stays 0), so the attempt risked collapsing the
+   shadow — reverted to the settled-size binding.
+   Scripts gained bounded calls (`timeout` on `qs` list/ipc/kill, `loginctl`,
+   `git clone`, slurp/grim capture, matugen, flatpak, wpctl/pactl,
+   instance-check), `hyprland-apply.py` validates the JSON payload is an object,
+   writes the managed `configs/solstice.lua` require-wired into `hyprland.lua`
+   and applies values live with `hyprctl keyword`; `hyprland-keybinds.py`
+   resolves `local` chord aliases, unrolls workspace-number loops for listing,
+   skips write+reload for unchanged lines and round-trips spawn args with
+   spaces; `log-errors.sh` strips non-printable bytes and drops the log
+   reader's own `[READER]` binary noise (errors.log was being corrupted);
+   `matugen-run.sh` cleans its sync temp on any exit, bounds the foreground
+   run and serializes the detached papirus/kitty replays with flock;
+   `settings-apply.py` uses unique atomic temps, survives malformed key=value
+   input, regex-quotes font family names and only pings kitty when its config
+   changed; `apps-manage.py` rejects path-escaping app ids, quotes spawn
+   args, normalizes actions like `hyprland-keybinds.py`, and writes state
+   atomically. `install.sh`/`update-shell.sh` serialize with flock, restore
+   the previous install when interrupted between the swap renames and swap
+   `backend/config/` + `style/themes/snapshots/` copy-then-rename instead of
+   `rm -rf` + copy.
+
+- 2026-09-21: Unused `VitalsService` removed end to end — the service never had
+   a consumer (the bar widgets are gone and its settings page was orphaned,
+   unreachable from the nav). Gone: `backend/services/VitalsService.qml` +
+   its qmldir registration, `shell/panels/settings/pages/VitalsPage.qml`, the
+   `vitals` IPC target in TopBar, `backend/config/vitals.json`, and the stale
+   Theme comment + ARCHITECTURE file-tree mentions. Verified no other
+   references remain (every other backend singleton has live consumers).
 
 ## Verification
 ```

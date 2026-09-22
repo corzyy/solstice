@@ -41,7 +41,7 @@ fi
 if command -v flatpak >/dev/null 2>&1; then
     while IFS=$'\t' read -r app version size; do
         [[ -n ${app:-} ]] && emit flatpak "$app" "${version:-Update available}${size:+ · $size}"
-    done < <(flatpak remote-ls --updates --columns=application,version,download-size 2>/dev/null || true)
+    done < <(timeout 60 flatpak remote-ls --updates --columns=application,version,download-size 2>/dev/null || true)
 fi
 
 if (( SOURCES_ONLY )); then

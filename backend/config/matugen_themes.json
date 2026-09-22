@@ -150,34 +150,18 @@
             "id": "hyprland",
             "title": "Hyprland",
             "category": "Desktop & system",
-            "desc": "Hyprland border and window colours",
+            "desc": "Hyprland border and shadow colours (lua config)",
             "blocks": [
                 {
                     "id": "hyprland",
-                    "remote": "templates/hyprland-colors.lua",
+                    "remote": "",
                     "input": "{templates}/hyprland-colors.lua",
-                    "output": "{HOME}/.config/hypr/matugen-colors.lua",
-                    "post_hook": ""
+                    "output": "{HOME}/.config/hypr/configs/colors.lua",
+                    "post_hook": "hyprctl reload 2>/dev/null || true"
                 }
             ],
-            "note": "Add require(\"matugen-colors\") to hyprland.lua"
-        },
-        {
-            "id": "niri",
-            "title": "Niri",
-            "category": "Desktop & system",
-            "desc": "Niri focus ring, border and shadow colours",
-            "blocks": [
-                {
-                    "id": "niri",
-                    "remote": "templates/niri-colors.kdl",
-                    "input": "{templates}/niri-colors.kdl",
-                    "output": "{HOME}/.config/niri/colors.kdl",
-                    "post_hook": "niri msg action load-config-file 2>/dev/null || true"
-                }
-            ],
-            "note": "Add include \"./colors.kdl\" to config.kdl",
-            "remove_hook": "niri msg action load-config-file 2>/dev/null || true"
+            "note": "The shell requires configs/colors at the end of hyprland.lua automatically.",
+            "remove_hook": "hyprctl reload 2>/dev/null || true"
         },
         {
             "id": "labwc",
@@ -228,39 +212,6 @@
             ],
             "note": "Add include bar-colors.conf to the sway config",
             "remove_hook": "swaymsg reload 2>/dev/null || true"
-        },
-        {
-            "id": "hyprwat",
-            "title": "Hyprwat",
-            "category": "Desktop & system",
-            "desc": "Hyprwat colour overrides",
-            "blocks": [
-                {
-                    "id": "hyprwat",
-                    "remote": "templates/hyprwat-colors.toml",
-                    "input": "{templates}/hyprwat-colors.toml",
-                    "output": "{HOME}/.config/hyprwat/hyprwat-colors.toml",
-                    "post_hook": ""
-                }
-            ],
-            "note": "Source it from hyprwat.conf"
-        },
-        {
-            "id": "mango",
-            "title": "MangoWC",
-            "category": "Desktop & system",
-            "desc": "Mango compositor colours",
-            "blocks": [
-                {
-                    "id": "mango",
-                    "remote": "templates/mango.conf",
-                    "input": "{templates}/colors.conf",
-                    "output": "{HOME}/.config/mango/colors.conf",
-                    "post_hook": "mmsg dispatch reload_config >/dev/null 2>&1 || true"
-                }
-            ],
-            "note": "Add source=~/.config/mango/colors.conf to config.conf",
-            "remove_hook": "mmsg dispatch reload_config >/dev/null 2>&1 || true"
         },
         {
             "id": "wlogout",
@@ -759,6 +710,23 @@
             "note": "Pick Matugen in Appearance settings"
         },
         {
+            "id": "pinta",
+            "title": "Pinta",
+            "category": "Apps & media",
+            "desc": "Pinta colour palette from the wallpaper",
+            "blocks": [
+                {
+                    "id": "pinta",
+                    "remote": "",
+                    "input": "{templates}/pinta-palette.txt",
+                    "output": "{HOME}/.config/Pinta/palette.txt",
+                    "post_hook": ""
+                }
+            ],
+            "toggle": "templatePinta",
+            "note": "Loads automatically on next Pinta start"
+        },
+        {
             "id": "rmpc",
             "title": "rmpc",
             "category": "Apps & media",
@@ -842,7 +810,7 @@
         },
         {
             "id": "vesktop-midnight",
-            "title": "Discord \u2014 Midnight",
+            "title": "Discord — Midnight",
             "category": "Apps & media",
             "desc": "Midnight Discord theme for Vesktop",
             "blocks": [
@@ -859,7 +827,7 @@
         },
         {
             "id": "vesktop-system24",
-            "title": "Discord \u2014 system24",
+            "title": "Discord — system24",
             "category": "Apps & media",
             "desc": "system24 theme for Vesktop",
             "blocks": [

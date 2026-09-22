@@ -8,6 +8,5 @@ singleton WallpaperService 1.0 WallpaperService.qml
 singleton BluetoothService 1.0 BluetoothService.qml
 singleton SettingsService 1.0 SettingsService.qml
 singleton SettingsRegistry 1.0 SettingsRegistry.qml
-singleton VitalsService 1.0 VitalsService.qml
-singleton UmbrielService 1.0 UmbrielService.qml
+singleton HyprlandService 1.0 HyprlandService.qml
 singleton I18n 1.0 I18n.qml

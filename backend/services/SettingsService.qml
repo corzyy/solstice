@@ -5,7 +5,7 @@ import Quickshell.Io
 import "../../style/themes"
 
 // SettingsService — compositor-agnostic app settings (kitty, fish prompt,
-// brightness). Window-manager look lives in UmbrielService.
+// brightness). Window-manager look lives in HyprlandService.
 Singleton {
     id: root
 

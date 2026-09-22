@@ -28,6 +28,7 @@ Item {
     // shared slide (pageVisible/pageX), so the page needs no transition of
     // its own.
     visible: root.scope.pageVisible(root.scope.pageWebApp)
+    opacity: root.scope.pageOpacity(root.scope.pageWebApp)
     transform: Translate { x: root.scope.pageX(root.scope.pageWebApp, root.width) }
     enabled: root.scope.webAppMode
 
@@ -372,7 +373,8 @@ Item {
             anchors.fill: parent
             clip: true
             spacing: 3
-            boundsBehavior: Flickable.StopAtBounds
+            boundsBehavior: Flickable.DragAndOvershootBounds
+            boundsMovement: Flickable.FollowBoundsBehavior
             reuseItems: true
             cacheBuffer: 200
             model: root.scope.filteredWebApps
@@ -520,7 +522,9 @@ Item {
                 }
             }
             }
+            EdgeFade { flick: removeList }
             ScrollIndicator { flick: removeList }
+            OverscrollSpring { flick: removeList }
         }
 
         // ---- status + log -----------------------------------------------
@@ -556,7 +560,8 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 10
                 clip: true
-                boundsBehavior: Flickable.StopAtBounds
+                boundsBehavior: Flickable.DragAndOvershootBounds
+                boundsMovement: Flickable.FollowBoundsBehavior
                 contentWidth: width
                 contentHeight: logText.implicitHeight
                 Text {
@@ -573,7 +578,9 @@ Item {
                     renderType: Theme.textRenderType
                 }
             }
+            EdgeFade { flick: logFlick; fadeColor: Theme.panelCardLowest }
             ScrollIndicator { flick: logFlick }
+            OverscrollSpring { flick: logFlick }
             Connections {
                 target: root.scope
                 function onWebAppLogChanged() {

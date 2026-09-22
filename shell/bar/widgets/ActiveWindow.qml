@@ -19,7 +19,7 @@ Item {
     implicitHeight: vertical ? col.implicitHeight + 10 : row.implicitHeight + 10
 
     readonly property string winAppId: {
-        try { return UmbrielService.focusedAppId || "" } catch (e) { return "" }
+        try { return HyprlandService.focusedAppId || "" } catch (e) { return "" }
     }
     readonly property bool glyphIcons: Theme.glyphWindowIcons
     readonly property bool iconBgVisible: Theme.iconBackground
@@ -93,7 +93,7 @@ Item {
     // xdg-toplevel titles may contain them and the bar label is one line.
     readonly property string winTitle: {
         try {
-            let t = ("" + (UmbrielService.focusedTitle || "")).replace(/[\r\n\t]+/g, " ").trim()
+            let t = ("" + (HyprlandService.focusedTitle || "")).replace(/[\r\n\t]+/g, " ").trim()
             if (t.length > 0) return t
         } catch (e) { }
         if (winAppName.length > 0) return winAppName

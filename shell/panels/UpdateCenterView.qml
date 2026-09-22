@@ -19,6 +19,9 @@ Column {
     // back button into the CC and drops the close button — the host runs the
     // reverse morph handoff on backRequested.
     property bool showBack: false
+    // Header row, exposed so the host's container transform (PanelShell
+    // morphTarget) can morph the tile replica into it.
+    property Item headerItem: headerRow
     signal closeRequested()
     signal backRequested()
     width: parent ? parent.width : 410
@@ -277,6 +280,7 @@ Column {
     }
 
     RowLayout {
+        id: headerRow
         width: parent.width
         spacing: 8
         PanelKit.BackButton {
@@ -420,7 +424,8 @@ Column {
             contentWidth: width
             contentHeight: listCol.implicitHeight
             clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            boundsBehavior: Flickable.DragAndOvershootBounds
+            boundsMovement: Flickable.FollowBoundsBehavior
             interactive: contentHeight > height
             Column {
                 id: listCol
@@ -439,6 +444,11 @@ Column {
                 }
             }
         }
+        EdgeFade {
+            flick: listFlick
+            fadeColor: Theme.cardBg
+        }
+        OverscrollSpring { flick: listFlick }
         Rectangle {
             visible: listFlick.contentHeight > listFlick.height
             width: 4

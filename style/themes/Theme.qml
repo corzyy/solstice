@@ -145,16 +145,19 @@ Singleton {
     readonly property color tertiary_fixed_dim: colorFile.adapter.tertiary_fixed_dim
 
     readonly property color bg: surface
-    readonly property color surface2: frostFill(surface_container_high, 0.18, 0.84)
-    readonly property color bgHover: frostFill(surface_container_highest, 0.14, 0.88)
-    readonly property color bgSelected: frostFill(primary_container, 0.08, 0.92)
+    // Panel/state fills all follow the Global > Transparency slider via
+    // panelFill (alpha = panelContentAlpha). At 0% transparency they are
+    // fully opaque, identical to the old frostFill values (panelBlur is 0).
+    readonly property color surface2: panelFill(surface_container_high)
+    readonly property color bgHover: panelFill(surface_container_highest)
+    readonly property color bgSelected: panelFill(primary_container)
     readonly property color cardBg: panelFill(surface_container_high)
     readonly property color borderColor: outline_variant
     readonly property color textPrimary: on_surface
     readonly property color textSecondary: on_surface_variant
     readonly property color textMuted: outline
     readonly property color iconColor: secondary
-    readonly property color iconBg: frostFill(surface_container_high, 0.16, 0.86)
+    readonly property color iconBg: panelFill(surface_container_high)
     readonly property color iconBgSelected: primary
     readonly property color iconColorSelected: on_primary
     readonly property color onAccent: on_primary
@@ -227,10 +230,10 @@ Singleton {
             property bool clockIcon: true
             property bool clockIconBackground: true
             property string workspacesPosition: "left"
-            // Caelestia bar.workspaces settings (ported 1:1 where Umbriel
-            // allows). displayType replaces the old workspaceStyle.
+            // Caelestia bar.workspaces settings (ported 1:1 where the
+            // workspace backend allows). displayType replaces the old
+            // workspaceStyle.
             property string workspaceDisplayType: "shapes"
-            property int workspaceShown: 5
             property bool workspaceActiveIndicator: true
             property bool workspaceActiveTrail: true
             property bool workspaceOccupiedBg: false
@@ -239,7 +242,7 @@ Singleton {
             property bool workspacePerMonitor: true
             property bool workspaceShowWindows: true
             property int workspaceMaxWindowIcons: 5
-            property var workspaceIgnoredTags: ["hide_in_bar", "xwl_popup"]
+            property var workspaceIgnoredTags: ["hide_in_bar", "xwl_popup", "org.quickshell", "quickshell"]
             property int workspaceSpacing: 4
             property real workspaceScale: 1.0
             // Window glyphs (Workspaces + Active window): symbol-font
@@ -250,7 +253,6 @@ Singleton {
             property int thickness: 30
             property int moduleSize: 0
             property real opacity: 1.0
-            property string position: "top"
             property bool textBold: false
             property bool antialiasing: true
             property bool aaShapes: true
@@ -264,6 +266,7 @@ Singleton {
             property int moduleSpacing: 8
             property int edgeDistance: 0
             property int topDistance: 0
+            property int displayRadius: 0
             property int contentPadding: 12
             property bool persistent: true
             property bool showOnHover: true
@@ -303,16 +306,11 @@ Singleton {
         fileView.writeAdapter()
     }
     // Shell rounding (Global > Rounding). Single source for all shell
-    // radii; synced to Umbriel window rounding by the Global slider.
+    // radii; window rounding lives on the Compositor page.
     readonly property int cornerRadius: Math.max(0, Math.min(40, Math.round(shellFile.adapter.radius ?? 20)))
     readonly property int cornerRadiusSmall: Math.max(0, Math.min(12, Math.round(cornerRadius * 0.6)))
     function setCornerRadius(v: int): void { setAdapterInt(shellFile, "radius", v, 0, 40) }
     readonly property int barThickness: Math.max(20, Math.min(48, Math.round(shellFile.adapter.thickness !== undefined ? shellFile.adapter.thickness : 30)))
-    readonly property string barPosition: {
-        let p = shellFile.adapter.position
-        if (p === "bottom" || p === "left" || p === "right" || p === "top") return p
-        return "top"
-    }
     readonly property real barOpacity: {
         let o = shellFile.adapter.opacity
         if (o === undefined || o === null || isNaN(o)) return 1.0
@@ -320,12 +318,6 @@ Singleton {
     }
     function setBarThickness(v: int): void { setAdapterInt(shellFile, "thickness", v, 20, 48) }
     function setBarOpacity(v: real): void { setAdapterReal(shellFile, "opacity", v, 0.0, 1.0) }
-    function setBarPosition(pos: string): void {
-        if (pos !== "top" && pos !== "bottom" && pos !== "left" && pos !== "right") return
-        if (shellFile.adapter.position === pos) return
-        shellFile.adapter.position = pos
-        shellFile.writeAdapter()
-    }
     readonly property bool animationsEnabled: shellFile.adapter.animationsEnabled
     function setAnimationsEnabled(v: bool): void { setAdapterBool(shellFile, "animationsEnabled", v) }
     // Fluid motion (Global > Animations, default on): spatial curves carry
@@ -383,8 +375,6 @@ Singleton {
         shellFile.adapter.workspaceDisplayType = nv
         shellFile.writeAdapter()
     }
-    readonly property int workspaceShown: Math.max(1, Math.min(20, Math.round(shellFile.adapter.workspaceShown !== undefined ? shellFile.adapter.workspaceShown : 5)))
-    function setWorkspaceShown(v: int): void { setAdapterInt(shellFile, "workspaceShown", v, 1, 20) }
     readonly property bool workspaceActiveIndicator: shellFile.adapter.workspaceActiveIndicator !== false
     function setWorkspaceActiveIndicator(v: bool): void { setAdapterBool(shellFile, "workspaceActiveIndicator", v) }
     readonly property bool workspaceActiveTrail: shellFile.adapter.workspaceActiveTrail !== false
@@ -414,7 +404,7 @@ Singleton {
                 return out
             }
         } catch (e) {}
-        return ["hide_in_bar", "xwl_popup"]
+        return ["hide_in_bar", "xwl_popup", "org.quickshell", "quickshell"]
     }
 
     readonly property int workspaceSpacing: Math.max(0, Math.min(24, Math.round(shellFile.adapter.workspaceSpacing !== undefined ? shellFile.adapter.workspaceSpacing : 4)))
@@ -593,6 +583,13 @@ Singleton {
     function setBarEdgeDistance(v: int): void { setAdapterInt(shellFile, "edgeDistance", v, 0, 600) }
     readonly property int barTopDistance: Math.max(0, Math.min(32, shellFile.adapter.topDistance !== undefined ? shellFile.adapter.topDistance : 0))
     function setBarTopDistance(v: int): void { setAdapterInt(shellFile, "topDistance", v, 0, 32) }
+    // Display radius (Settings > Panels > Taskbar > Size and gaps > Screen
+    // edges): concave coves carved into a docked bar's underside where it
+    // meets the side screen edges, like the fillets joining panels to the
+    // bar. The bar stays full-bleed everywhere else; set it to
+    // Appearance > Rounding to match outward. 0 = plain square bar.
+    readonly property int barDisplayRadius: Math.max(0, Math.min(40, shellFile.adapter.displayRadius !== undefined ? shellFile.adapter.displayRadius : 0))
+    function setBarDisplayRadius(v: int): void { setAdapterInt(shellFile, "displayRadius", v, 0, 40) }
     readonly property int barContentPadding: Math.max(0, Math.min(32, shellFile.adapter.contentPadding !== undefined ? shellFile.adapter.contentPadding : 12))
     function setBarContentPadding(v: int): void { setAdapterInt(shellFile, "contentPadding", v, 0, 32) }
     // Taskbar behaviour (Caelestia Nexus bar.* mapping).
@@ -613,10 +610,18 @@ Singleton {
     // fused borderless panels, tray-menu style) — not even divider.
     readonly property color panelBorderColor: panelAccentBorder ? accent : "transparent"
     function setPanelAccentBorder(v: bool): void { setAdapterBool(shellFile, "panelAccentBorder", v) }
-    readonly property real panelBlur: 0.0
+    // Panel blur (Hyprland > Panel blur): strength of the compositor blur
+    // behind the bar and the panels, 0 = off. Applied live as layer rules
+    // by HyprlandService (hl.layer_rule per shell namespace) and persisted
+    // to the managed configs/solstice.lua by backend/scripts/hyprland-apply.py.
+    // Needs translucency to be visible (Appearance > Transparency).
+    readonly property real panelBlur: Math.max(0.0, Math.min(1.0, Number(shellFile.adapter.panelBlur ?? 0.6)))
+    function setPanelBlur(v: real): void { setAdapterReal(shellFile, "panelBlur", v, 0.0, 1.0) }
     readonly property real panelBgAlpha: 1.0 - panelBlur * 0.48
-    readonly property color panelBg: frostFill(bg, 0.48, 0.52)
-    readonly property color panelSurface: frostFill(surface, 0.22, 0.80)
+    // Window fills follow the Global > Transparency slider (barOpacity):
+    // every panel window, dialog and OSD stays in sync with the bar.
+    readonly property color panelBg: withAlpha(bg, panelWindowAlpha)
+    readonly property color panelSurface: withAlpha(surface, panelWindowAlpha)
     function frostFill(c: color, strength: real, floorA: real): color {
         if (panelBlur <= 0.001) return c
         let a = 1.0 - panelBlur * strength
@@ -625,7 +630,7 @@ Singleton {
     }
     // Shell transparency: the Global > Transparency slider writes the
     // `opacity` value, so the bar and every panel window stay in sync. The
-    // floor keeps panels readable while Umbriel's layer blur provides the
+    // floor keeps panels readable while the compositor backdrop provides the
     // frosted backdrop.
     readonly property real panelTransparency: Math.max(0.0, Math.min(1.0, 1.0 - barOpacity))
     function setPanelTransparency(v: real): void {
@@ -863,17 +868,6 @@ Singleton {
     function setOsdThemeEnabled(v: bool): void { setAdapterBool(osdFile, "themeEnabled", v) }
     function setOsdDuration(v: int): void { setAdapterInt(osdFile, "duration", v, 500, 5000) }
 
-    FileView {
-        id: calendarFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/calendar.json"
-        watchChanges: true; onFileChanged: debouncedReload(calendarFile); blockLoading: true; printErrors: false
-        // NOTE: weekStartDay is owned by CalendarPanel — it is
-        // declared here only so layout writes never drop it from the file.
-        adapter: JsonAdapter { property string weekStartDay: "sunday"; property string notifSide: "left" }
-    }
-    // Which side of the calendar popup holds notifications ("left"|"right").
-    readonly property bool calendarNotifLeft: calendarFile.adapter.notifSide !== "right"
-
     // ---- Launcher (Panels > Launcher; bar OS icon + app search popup) ----
     FileView {
         id: launcherFile
@@ -983,6 +977,113 @@ Singleton {
         screenshotFile.adapter.saveDir = d
         screenshotFile.writeAdapter()
     }
+
+    // ---- Dock (Panels > Dock; shell/panels/DockPanel.qml) --
+    // Port of DankMaterialShell's dock core (AvengeMedia/DankMaterialShell):
+    // single dock, pinned + running apps, launcher button, indicators,
+    // auto-hide, overlay layer, per-edge position. DMS multi-dock configs,
+    // widgets, trash and connected-frame chrome are out of scope.
+    FileView {
+        id: dockFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/dock.json"
+        watchChanges: true; onFileChanged: debouncedReload(dockFile); blockLoading: true; printErrors: false
+        adapter: JsonAdapter {
+            property bool enabled: false
+            property string position: "bottom"
+            property int iconSize: 42
+            property int spacing: 8
+            property int itemSpacing: 8
+            property int margin: 8
+            property real opacity: 1.0
+            property bool autoHide: false
+            property bool overlay: false
+            property bool showFullscreen: false
+            property bool launcherEnabled: true
+            property bool groupByApp: true
+            property bool currentWorkspaceOnly: false
+            property bool showIndicators: true
+            property string indicatorStyle: "circle"
+            property bool magnify: true
+            property bool borderEnabled: false
+            property var pinnedApps: []
+        }
+    }
+    readonly property var dockPositions: ["bottom", "top", "left", "right"]
+    readonly property bool dockEnabled: dockFile.adapter.enabled === true
+    function setDockEnabled(v: bool): void { setAdapterBool(dockFile, "enabled", v) }
+    readonly property string dockPosition: {
+        let p = (dockFile.adapter.position || "bottom") + ""
+        return dockPositions.indexOf(p) !== -1 ? p : "bottom"
+    }
+    function setDockPosition(p: string): void {
+        let v = (p || "bottom") + ""
+        if (dockPositions.indexOf(v) === -1) return
+        if ((dockFile.adapter.position || "bottom") === v) return
+        dockFile.adapter.position = v
+        dockFile.writeAdapter()
+    }
+    readonly property bool dockVertical: dockPosition === "left" || dockPosition === "right"
+    readonly property int dockIconSize: Math.max(16, Math.min(96, Math.round(dockFile.adapter.iconSize !== undefined ? dockFile.adapter.iconSize : 42)))
+    function setDockIconSize(v: int): void { setAdapterInt(dockFile, "iconSize", v, 16, 96) }
+    readonly property int dockSpacing: Math.max(0, Math.min(32, Math.round(dockFile.adapter.spacing !== undefined ? dockFile.adapter.spacing : 8)))
+    function setDockSpacing(v: int): void { setAdapterInt(dockFile, "spacing", v, 0, 32) }
+    readonly property int dockItemSpacing: Math.max(0, Math.min(32, Math.round(dockFile.adapter.itemSpacing !== undefined ? dockFile.adapter.itemSpacing : 8)))
+    function setDockItemSpacing(v: int): void { setAdapterInt(dockFile, "itemSpacing", v, 0, 32) }
+    readonly property int dockMargin: Math.max(0, Math.min(100, Math.round(dockFile.adapter.margin !== undefined ? dockFile.adapter.margin : 8)))
+    function setDockMargin(v: int): void { setAdapterInt(dockFile, "margin", v, 0, 100) }
+    readonly property real dockOpacity: {
+        let o = dockFile.adapter.opacity
+        if (o === undefined || o === null || isNaN(Number(o))) return 1.0
+        return Math.max(0.3, Math.min(1.0, Number(o)))
+    }
+    function setDockOpacity(v: real): void { setAdapterReal(dockFile, "opacity", v, 0.3, 1.0) }
+    readonly property bool dockAutoHide: dockFile.adapter.autoHide === true
+    function setDockAutoHide(v: bool): void { setAdapterBool(dockFile, "autoHide", v) }
+    readonly property bool dockOverlay: dockFile.adapter.overlay === true
+    function setDockOverlay(v: bool): void { setAdapterBool(dockFile, "overlay", v) }
+    readonly property bool dockShowFullscreen: dockFile.adapter.showFullscreen === true
+    function setDockShowFullscreen(v: bool): void { setAdapterBool(dockFile, "showFullscreen", v) }
+    readonly property bool dockLauncherEnabled: dockFile.adapter.launcherEnabled !== false
+    function setDockLauncherEnabled(v: bool): void { setAdapterBool(dockFile, "launcherEnabled", v) }
+    readonly property bool dockGroupByApp: dockFile.adapter.groupByApp !== false
+    function setDockGroupByApp(v: bool): void { setAdapterBool(dockFile, "groupByApp", v) }
+    readonly property bool dockCurrentWorkspaceOnly: dockFile.adapter.currentWorkspaceOnly === true
+    function setDockCurrentWorkspaceOnly(v: bool): void { setAdapterBool(dockFile, "currentWorkspaceOnly", v) }
+    readonly property bool dockShowIndicators: dockFile.adapter.showIndicators !== false
+    function setDockShowIndicators(v: bool): void { setAdapterBool(dockFile, "showIndicators", v) }
+    readonly property string dockIndicatorStyle: {
+        let s = (dockFile.adapter.indicatorStyle || "circle") + ""
+        return s === "line" ? "line" : "circle"
+    }
+    function setDockIndicatorStyle(s: string): void {
+        let v = (s || "circle") + ""
+        if (v !== "line") v = "circle"
+        if ((dockFile.adapter.indicatorStyle || "circle") === v) return
+        dockFile.adapter.indicatorStyle = v
+        dockFile.writeAdapter()
+    }
+    readonly property bool dockMagnify: dockFile.adapter.magnify !== false
+    function setDockMagnify(v: bool): void { setAdapterBool(dockFile, "magnify", v) }
+    readonly property bool dockBorderEnabled: dockFile.adapter.borderEnabled === true
+    function setDockBorderEnabled(v: bool): void { setAdapterBool(dockFile, "borderEnabled", v) }
+    function dockPinnedApps(): var { return toStrArray(dockFile.adapter.pinnedApps) }
+    function isDockPinned(appId: string): bool {
+        let id = (appId || "").trim()
+        if (id.length === 0) return false
+        return dockPinnedApps().indexOf(id) >= 0
+    }
+    function setDockPinned(appId: string, pinned: bool): void {
+        let id = (appId || "").trim()
+        if (id.length === 0) return
+        let list = dockPinnedApps()
+        let i = list.indexOf(id)
+        if (pinned && i < 0) list.push(id)
+        else if (!pinned && i >= 0) list.splice(i, 1)
+        else return
+        dockFile.adapter.pinnedApps = list
+        dockFile.writeAdapter()
+    }
+    function toggleDockPinned(appId: string): void { setDockPinned(appId, !isDockPinned(appId)) }
 
     readonly property var barModuleIds: ["launcher", "workspaces", "activewindow", "clock", "systemtray", "controlcenter"]
     function barNormalizeSection(s: string): string {
@@ -1250,7 +1351,7 @@ Singleton {
 
     // Generic per-module label visibility (future-proof).
     // Modules with their own service storage (volume/showPct,
-    // vitals/showLabels, clock/clockFormat) keep it for backwards
+    // clock/clockFormat) keep it for backwards
     // compat. Everything else — updates count, activewindow title, and any
     // future module with a text label — uses this central map so a new
     // widget only needs:
@@ -1563,7 +1664,18 @@ Singleton {
     // render before it falls back to its normal close run; it must stay
     // well below panelHideDelay, because the outgoing window unmaps then.
     readonly property int durPanelMorph: animationsEnabled ? durDefaultSpatial : 0
-    readonly property var curvePanelMorph: curvePanelOpen
+    // M3 emphasized ease: slow leave, fast middle, gentle settle. The
+    // two-segment spline keeps velocity/acceleration continuous through
+    // the middle, so the card glide reads as one smooth morph instead of
+    // the robotic start/stop of a single-segment symmetric ease-in-out.
+    // Deliberately not curvePanelOpen (fast attack with overshoot).
+    readonly property var curvePanelMorph: curveEmphasizedFull
+    // Container-transform open (overlay drill-ins): the curtain's
+    // front-loaded attack is right for a drawer emerging from the bar, but a
+    // tile growing into a page reads as a snap with it (the shape change is
+    // over in the first ~fifth of the run). The overlay morph leaves and
+    // lands evenly instead — the same curve as its return run.
+    readonly property var curvePanelMorphOverlay: curveStandard
     readonly property int durPanelMorphHold: animMs(300)
     // Content choreography of a morph (CaelestiaPopout). The cards never
     // blend (two translucent layer surfaces wash out over the desktop and
@@ -1582,6 +1694,13 @@ Singleton {
     readonly property int panelMorphContentIn: durDefaultEffects
     readonly property real panelMorphShift: 14
     readonly property real panelMorphScale: 0.04
+    // Overlay container transform (CaelestiaPopout._overlayContent): the
+    // replica of the clicked tile/button leads the open run while the page
+    // content follows over the tail of the card glide; the return drops the
+    // content right away and lets the replica carry the collapse back.
+    // See PanelShell.morphReplica.
+    readonly property int panelMorphReplicaDelay: Math.round(durPanelMorph * 0.5)
+    readonly property int panelMorphReplicaFade: Math.max(1, Math.round(durPanelMorph * 0.5))
     // Attached-bar morph: dropdown boxes sit flush with the bar edge
     // instead of floating detached below it. Must stay 0: the panel
     // windows are placed on the compositor's remaining area (bar bottom =

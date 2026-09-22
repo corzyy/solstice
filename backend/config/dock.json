@@ -1,0 +1,21 @@
+{
+    "autoHide": false,
+    "borderEnabled": false,
+    "currentWorkspaceOnly": false,
+    "enabled": false,
+    "groupByApp": true,
+    "iconSize": 42,
+    "indicatorStyle": "circle",
+    "itemSpacing": 8,
+    "launcherEnabled": false,
+    "magnify": true,
+    "margin": 3,
+    "opacity": 0.65,
+    "overlay": false,
+    "pinnedApps": [
+    ],
+    "position": "bottom",
+    "showFullscreen": false,
+    "showIndicators": true,
+    "spacing": 8
+}

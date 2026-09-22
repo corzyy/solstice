@@ -71,11 +71,16 @@ QtObject {
     }
     // Source side (control center tile/button): remember where the drill-in
     // was clicked from. shell.qml hands the rect to beginOverlay() when the
-    // panel switch starts.
-    function publishOrigin(id: string, rect): void {
+    // panel switch starts. `source` is an optional descriptor
+    // ({ component, props }) the incoming panel renders as a container-
+    // transform replica of the tile/button (see PanelShell.morphReplica).
+    function publishOrigin(id: string, rect, source): void {
         if (!id || !rect || rect.width <= 0 || rect.height <= 0)
             return
-        root.pendingOrigins[id] = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        let o = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        if (source)
+            o.source = source
+        root.pendingOrigins[id] = o
     }
     function takeOrigin(id: string): var {
         const r = root.pendingOrigins[id] || null
@@ -129,6 +134,12 @@ QtObject {
     }
     function publish(id: string, rect): void {
         if (!id || !rect || rect.width <= 0 || rect.height <= 0)
+            return
+        // Compare-before-assign: the popout republishes on every geometry
+        // change, including ones that round to the same rect.
+        const cur = root.rects[id]
+        if (cur && cur.x === rect.x && cur.y === rect.y
+                && cur.width === rect.width && cur.height === rect.height)
             return
         // Plain object on purpose: the rects map is read via rectOf() only,
         // so no change notification (and no binding churn) is needed.

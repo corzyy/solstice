@@ -45,14 +45,16 @@ NexusControls.PageBase {
     onPageEntered: WallpaperService.refresh()
 
     // ---- data ------------------------------------------------------------
-    // Landing page: the current wallpaper as a large preview on top, the five
+    // Landing page: the current wallpaper as a large preview on top, the
     // latest wallpapers as a plain nameless thumbnail row underneath.
+    // The row houses up to recentStoredCount items but only shows
+    // recentVisibleCount at a time (scroll for the rest).
     readonly property string previewPath: WallpaperService.current !== ""
         ? WallpaperService.current
         : (WallpaperService.files.length > 0 ? WallpaperService.files[0] : "")
     readonly property var recentList: {
         // Recents first, topped up from the scanned folder so the row always
-        // holds five wallpapers once the folder has them.
+        // holds recentStoredCount wallpapers once the folder has them.
         let out = []
         let seen = {}
         let push = p => {
@@ -63,13 +65,19 @@ NexusControls.PageBase {
         }
         let rec = WallpaperService.recents
         let files = WallpaperService.files
-        for (let i = 0; i < rec.length && out.length < root.recentCount; i++) push(rec[i])
-        for (let i = 0; i < files.length && out.length < root.recentCount; i++) push(files[i])
+        for (let i = 0; i < rec.length && out.length < root.recentStoredCount; i++) push(rec[i])
+        for (let i = 0; i < files.length && out.length < root.recentStoredCount; i++) push(files[i])
         return out
     }
-    readonly property int recentCount: 5
+    // Visible at the same time; the carousel scrolls through recentStoredCount.
+    readonly property int recentVisibleCount: 5
+    readonly property int recentStoredCount: WallpaperService.recentLimit
     readonly property int recentGap: 12
-    readonly property int recentTileWidth: Math.max(72, Math.floor((width - (root.recentCount - 1) * root.recentGap - 16) / root.recentCount))
+    readonly property int recentTileWidth: Math.max(72, Math.floor((width - (root.recentVisibleCount - 1) * root.recentGap - 16) / root.recentVisibleCount))
+    // Scroll-effect geometry (see style/ui/CarouselCard): the centred card
+    // grows, neighbours shrink; height stays fixed so the row never jumps.
+    readonly property int recentFocusedWidth: root.recentTileWidth + 24
+    readonly property int recentParallaxPad: 20
     readonly property int wallpaperGridRows: Math.max(1, Math.min(4, Math.ceil(WallpaperService.files.length / 3)))
     readonly property var schemeLabels: themeEngine.matugenTypes.map(t => themeEngine.matugenTypeLabels[t])
     readonly property bool lightBg: (0.299 * Theme.bg.r + 0.587 * Theme.bg.g + 0.114 * Theme.bg.b) > 0.5
@@ -244,7 +252,7 @@ NexusControls.PageBase {
         }
     }
 
-    // ---- recent wallpapers (latest five, no names) -----------------------
+    // ---- recent wallpapers (scrollable, five visible, no names) --------
     Column {
         visible: root.view === ""
         width: parent.width
@@ -277,54 +285,100 @@ NexusControls.PageBase {
         Rectangle {
             visible: root.recentList.length > 0
             width: parent.width
-            height: recentRow.height + 32
+            height: recentCarousel.height + 32
             radius: 28
             color: Theme.panelCard
             antialiasing: Theme.shapesAa
-            Row {
-                id: recentRow
+            // Scrolling carousel (see style/ui/CarouselCard): the centred
+            // card grows while neighbours shrink, and each thumbnail pans
+            // against the scroll direction (parallax) via centerNorm.
+            ListView {
+                id: recentCarousel
                 anchors.centerIn: parent
+                width: parent.width - 32
+                height: root.recentTileWidth
+                clip: true
+                orientation: ListView.Horizontal
                 spacing: root.recentGap
-                Repeater {
-                    model: root.recentList.slice(0, root.recentCount)
-                    delegate: Item {
-                        id: recentTile
-                        required property var modelData
-                        required property int index
-                        width: root.recentTileWidth
-                        height: width
-                        readonly property bool isCurrent: ("" + recentTile.modelData) === WallpaperService.current
-                        Ui.ClipRect {
-                            anchors.fill: parent
-                            radius: 16
-                            color: Theme.panelCard
-                            antialiasing: Theme.shapesAa
-                            Image {
-                                property string brokenThumb: ""
-                                anchors.fill: parent
-                                source: brokenThumb === recentTile.modelData
-                                    ? WallpaperService.originalUrl(recentTile.modelData)
-                                    : WallpaperService.imageUrl(recentTile.modelData)
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                                cache: true
-                                sourceSize.width: 320
-                                sourceSize.height: 320
-                                smooth: Theme.imageSmooth
-                                mipmap: Theme.imageMipmap
-                                onStatusChanged: if (status === Image.Error && brokenThumb !== recentTile.modelData) brokenThumb = recentTile.modelData
-                            }
+                boundsBehavior: Flickable.StopAtBounds
+                snapMode: ListView.SnapToItem
+                highlightRangeMode: ListView.StrictlyEnforceRange
+                highlightMoveDuration: Theme.durLarge
+                preferredHighlightBegin: (width - root.recentFocusedWidth) / 2
+                preferredHighlightEnd: preferredHighlightBegin
+                model: root.recentList
+                delegate: Ui.CarouselCard {
+                    id: recentCard
+                    view: recentCarousel
+                    focusedWidth: root.recentFocusedWidth
+                    neighbourWidth: root.recentTileWidth
+                    distantWidth: Math.max(72, root.recentTileWidth - 24)
+                    cardHeight: root.recentTileWidth
+                    centerRange: root.recentFocusedWidth
+                    readonly property bool isCurrentWallpaper: ("" + recentCard.modelData) === WallpaperService.current
+                    Ui.ClipRect {
+                        anchors.fill: parent
+                        radius: 16
+                        color: Theme.panelCard
+                        antialiasing: Theme.shapesAa
+                        Ui.CarouselParallaxImage {
+                            property string brokenThumb: ""
+                            height: parent.height
+                            fullWidth: root.recentFocusedWidth + 2 * root.recentParallaxPad
+                            parallaxPad: root.recentParallaxPad
+                            centerNorm: recentCard.centerNorm
+                            source: brokenThumb === recentCard.modelData
+                                ? WallpaperService.originalUrl(recentCard.modelData)
+                                : WallpaperService.imageUrl(recentCard.modelData)
+                            sourceSize.width: 320
+                            sourceSize.height: 320
+                            cache: true
+                            smooth: Theme.imageSmooth
+                            mipmap: Theme.imageMipmap
+                            onStatusChanged: if (status === Image.Error && brokenThumb !== recentCard.modelData) brokenThumb = recentCard.modelData
                         }
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 16
-                            color: "transparent"
-                            border.width: recentTile.isCurrent ? 2 : 0
-                            border.color: Theme.accent
-                            antialiasing: Theme.shapesAa
-                        }
-                        Ui.StateLayer { radius: 16; color: Theme.textPrimary; onClicked: root.applyWallpaper(recentTile.modelData) }
                     }
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 16
+                        color: "transparent"
+                        border.width: recentCard.isCurrentWallpaper ? 2 : 0
+                        border.color: Theme.accent
+                        antialiasing: Theme.shapesAa
+                    }
+                    Ui.StateLayer {
+                        radius: 16
+                        color: Theme.textPrimary
+                        onClicked: {
+                            recentCarousel.currentIndex = recentCard.index
+                            root.applyWallpaper(recentCard.modelData)
+                        }
+                    }
+                }
+            }
+            Timer {
+                id: recentWheelDebounce
+                interval: 120
+            }
+            Ui.EdgeFade {
+                flick: recentCarousel
+                fadeColor: Theme.panelCard
+                fadeSize: 40
+            }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: event => {
+                    if (event.angleDelta.y === 0) return
+                    // One step per notch: momentum scrolling would otherwise
+                    // race through every card (see MediaPlayerCard).
+                    if (recentWheelDebounce.running) {
+                        event.accepted = true
+                        return
+                    }
+                    recentWheelDebounce.start()
+                    if (event.angleDelta.y > 0) recentCarousel.decrementCurrentIndex()
+                    else if (event.angleDelta.y < 0) recentCarousel.incrementCurrentIndex()
+                    event.accepted = true
                 }
             }
         }
@@ -405,10 +459,12 @@ NexusControls.PageBase {
         visible: root.view === "wallpapers"
         width: parent.width
         spacing: 0
-        GridView {
-            id: wallpaperGrid
+        Item {
             width: parent.width
-            height: root.wallpaperGridRows * cellHeight
+            implicitHeight: root.wallpaperGridRows * wallpaperGrid.cellHeight
+            GridView {
+            id: wallpaperGrid
+            anchors.fill: parent
             clip: true
             cellWidth: Math.floor(width / 3)
             cellHeight: 140
@@ -417,7 +473,8 @@ NexusControls.PageBase {
             // wallpaper images before the user ever opened this sub-view.
             // Only bind the model while the view is actually shown.
             model: root.view === "wallpapers" ? WallpaperService.files : []
-            boundsBehavior: Flickable.StopAtBounds
+            boundsBehavior: Flickable.DragAndOvershootBounds
+            boundsMovement: Flickable.FollowBoundsBehavior
             reuseItems: true
             cacheBuffer: 400
             delegate: Item {
@@ -483,6 +540,9 @@ NexusControls.PageBase {
                     }
                     Ui.StateLayer { radius: 16; color: Theme.textPrimary; onClicked: root.applyWallpaper(wpTile.modelData) }
                 }
+            }
+            Ui.EdgeFade { flick: wallpaperGrid; fadeColor: Theme.panelWindowSurface }
+            Ui.OverscrollSpring { flick: wallpaperGrid }
             }
         }
         Text {
@@ -730,9 +790,11 @@ NexusControls.PageBase {
         signal clicked()
         implicitWidth: pillContent.implicitWidth + 40
         implicitHeight: 40
-        radius: height / 2
+        // Hover morphs the pill into a rounded rectangle.
+        radius: pillMouse.containsMouse ? 12 : height / 2
         color: Theme.panelCardHigh
         antialiasing: Theme.shapesAa
+        Behavior on radius { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
         Row {
             id: pillContent
             anchors.centerIn: parent
@@ -757,6 +819,6 @@ NexusControls.PageBase {
                 renderType: Theme.textRenderType
             }
         }
-        Ui.StateLayer { id: pillMouse; radius: pill.height / 2; color: Theme.textPrimary; onClicked: pill.clicked() }
+        Ui.StateLayer { id: pillMouse; radius: parent.radius; color: Theme.textPrimary; onClicked: pill.clicked() }
     }
 }

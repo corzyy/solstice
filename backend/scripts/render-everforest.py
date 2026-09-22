@@ -64,11 +64,11 @@ for m in pattern.finditer(cfg):
 
 print("Running post_hooks...")
 subprocess.run(["bash","-c","killall -USR1 kitty 2>/dev/null || pkill -USR1 kitty 2>/dev/null || true"])
-# Umbriel renders colors.toml from the same palette above (templates.umbriel).
+# Hyprland renders colors.lua from the same palette above (templates.hyprland).
 # matugen's own post_hook only fires on wallpaper runs, so preset theme
-# switches must reload the compositor here, otherwise Umbriel keeps stale
-# window colors until a manual config reload.
-subprocess.run(["bash","-c","umbriel msg config-reload >/dev/null 2>&1 || true"])
+# switches must render/reload the compositor here, otherwise Hyprland keeps stale
+# window colors until a manual reload.
+subprocess.run(["bash","-c","hyprctl reload >/dev/null 2>&1 || true"])
 gtk_theme = "adw-gtk3-dark" if MODE=="dark" else "adw-gtk3"
 subprocess.run(["bash","-c", f"gsettings set org.gnome.desktop.interface gtk-theme '' 2>/dev/null; gsettings set org.gnome.desktop.interface gtk-theme '{gtk_theme}' 2>/dev/null || true"])
 hook = Path(f"{HOME}/.config/matugen/post-hook-scripts/gtk-themes-reload.sh")
@@ -78,10 +78,4 @@ pap = Path(f"{HOME}/.cache/matugen/papirus-folders.sh")
 if pap.exists():
     subprocess.run(["bash", str(pap)])
 subprocess.run(["bash","-c","sed -i -E 's/^color_theme *= *\\\".*\\\"/color_theme = \\\"matugen\\\"/; s/^theme_background *= *.*/theme_background = False/' \"$HOME/.config/btop/btop.conf\" 2>/dev/null; pkill -USR2 btop 2>/dev/null || true"])
-# Helium: preset switches render templates above but never run their matugen
-# post_hooks, so the browser palette is applied here (no-op while Helium runs;
-# apply-helium.sh then waits for exit).
-helium = Path(f"{HOME}/.config/quickshell/solstice/backend/scripts/apply-helium.sh")
-if helium.exists():
-    subprocess.run(["bash", str(helium)])
 print("done")

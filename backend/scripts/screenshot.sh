@@ -2,10 +2,15 @@
 # screenshot.sh — capture backend for the screenshot UI
 # (shell/overlays/ScreenshotUI.qml, PRINT keybind).
 #
-# Usage: screenshot.sh <region|window|fullscreen> [geometry]
-#   region      interactive selection via slurp (geometry ignored)
-#   window      geometry "X,Y WxH" from umbriel's window list; falls back
-#               to the full desktop when empty
+# Usage: screenshot.sh <region|region-geom|window|fullscreen> [arg] [output]
+#   region      interactive selection via slurp (argument ignored, legacy
+#               fallback for IPC use)
+#   region-geom grim geometry from the native QML selector
+#               (arg = "x,y WxH" in layout coordinates, output arg ignored:
+#               layout coords already pin the output, and grim forbids
+#               combining -o with -g)
+#   window      focused Hyprland window geometry via `hyprctl activewindow`;
+#               falls back to the full desktop when empty
 #   fullscreen  all outputs
 #
 # Options (environment, set by the UI from backend/config/screenshot.json):
@@ -16,11 +21,12 @@
 #
 # The shot is saved to $SOLSTICE_SHOT_DIR, else $XDG_PICTURES_DIR/Screenshots,
 # else ~/Pictures/Screenshots. Exit codes: 0 ok, 3 region cancelled,
-# 2 grim failed, 127 missing dependency. stdout prints the saved path.
+# 2 capture failed, 127 missing dependency. stdout prints the saved path.
 set -u
 
 mode="${1:-fullscreen}"
-geo="${2:-}"
+arg="${2:-}"
+out="${3:-}"
 
 cursor="${SOLSTICE_SHOT_CURSOR:-0}"
 copy="${SOLSTICE_SHOT_CLIPBOARD:-1}"
@@ -49,12 +55,29 @@ fi
 # Stored paths are portable ("~/Pictures/..."), expand before use.
 dir="${dir/#\~/$HOME}"
 mkdir -p "$dir" || exit 1
-file="$dir/Screenshot_$(date +%Y-%m-%d_%H-%M-%S).png"
+# STABILITY: two captures within the same second must not overwrite each
+# other; the pid suffix makes the name unique.
+file="$dir/Screenshot_$(date +%Y-%m-%d_%H-%M-%S)_$$.png"
 
 grim_flags=()
 [[ "$cursor" == "1" ]] && grim_flags+=(-c)
 
 case "$mode" in
+    region-geom)
+        # Native QML selector (shell/overlays/ScreenshotUI.qml): the pill
+        # stays mapped while dragging, grim grabs only after both surfaces
+        # unmap. Strict validation — $arg lands inside a grim -g flag.
+        if [[ ! "$arg" =~ ^-?[0-9]+,-?[0-9]+\ [0-9]+x[0-9]+$ ]]; then
+            exit 3
+        fi
+        read -r _ dims <<< "$arg"
+        read -r w h <<< "${dims//x/ }"
+        [[ "$w" -ge 4 && "$h" -ge 4 ]] || exit 3
+        # NOTE: no `grim -o` here — grim treats -o and -g as mutually
+        # exclusive. Layout coords (screen.x/y + local drag) already
+        # address the right output.
+        timeout 15 grim "${grim_flags[@]}" -g "$arg" "$file" || exit 2
+        ;;
     region)
         if ! command -v slurp >/dev/null 2>&1; then
             notify "Screenshot failed" "slurp is not installed"
@@ -64,19 +87,34 @@ case "$mode" in
         # is a pipe, and processes spawned by the shell inherit an unread
         # stdin pipe — slurp would block forever and never map its selection
         # overlay (region mode looked completely dead).
-        sel="$(slurp </dev/null 2>/dev/null)" || exit 3
+        # A selection can take a while, but must not hang the shell forever.
+        sel="$(timeout "${SOLSTICE_SHOT_SELECT_TIMEOUT:-300}" slurp </dev/null 2>/dev/null)" || exit 3
         [[ -n "$sel" ]] || exit 3
-        grim "${grim_flags[@]}" -g "$sel" "$file" || exit 2
+        timeout 15 grim "${grim_flags[@]}" -g "$sel" "$file" || exit 2
         ;;
     window)
-        if [[ -n "$geo" ]]; then
-            grim "${grim_flags[@]}" -g "$geo" "$file" || exit 2
+        # Hyprland exposes window geometry over IPC, so the focused window
+        # is grabbed by coordinates (no compositor picker needed).
+        geo=""
+        if command -v hyprctl >/dev/null 2>&1; then
+            geo="$(hyprctl activewindow -j 2>/dev/null | python3 -c \
+'import json,sys
+try:
+    w = json.load(sys.stdin)
+    at, size = w.get("at") or [], w.get("size") or []
+    if w.get("address") not in (None, "0x0", "") and len(at) == 2 and len(size) == 2:
+        print("%d,%d %dx%d" % (at[0], at[1], size[0], size[1]))
+except Exception:
+    pass' 2>/dev/null)"
+        fi
+        if [[ "$geo" =~ ^-?[0-9]+,-?[0-9]+\ [0-9]+x[0-9]+$ ]]; then
+            timeout 15 grim "${grim_flags[@]}" -g "$geo" "$file" || exit 2
         else
-            grim "${grim_flags[@]}" "$file" || exit 2
+            timeout 15 grim "${grim_flags[@]}" "$file" || exit 2
         fi
         ;;
     *)
-        grim "${grim_flags[@]}" "$file" || exit 2
+        timeout 15 grim "${grim_flags[@]}" "$file" || exit 2
         ;;
 esac
 

@@ -7,7 +7,7 @@ import M3Shapes
 import "../../../style/themes"
 import "../../../backend/services"
 
-// Caelestia workspace bar item, ported onto Umbriel.
+// Caelestia workspace bar item, ported onto Hyprland.
 //
 // Source: caelestia-dots/shell modules/bar/components/workspaces/*
 // (Workspaces.qml, Workspace.qml, OccupiedBg.qml, GapMarkers.qml,
@@ -21,12 +21,12 @@ import "../../../backend/services"
 //     that tapers with the stretch while moving, round again once settled
 //   - displayType shapes/numbers (workspace ordinals as labels)
 //   - window icons per workspace (maxWindowIcons)
-// Differences forced by Umbriel/horizontal bars:
-//   - workspaces are numbered (group window of `shown` around the active one)
-//     and synthesised when they do not exist yet
+// Differences forced by Hyprland/horizontal bars:
+//   - the model follows Hyprland's workspace list (persistent workspaces
+//     always exist; named ones sort by id); no fixed/synthesised slots
 //   - in a horizontal bar the window icons sit next to the shape (Caelestia's
 //     vertical bar stacks them below; vertical bars keep that layout here)
-//   - no special workspaces / blur-on-special (not an Umbriel concept)
+//   - no special workspaces shown (the scratchpad is toggled by keybind)
 Rectangle {
     id: root
 
@@ -69,7 +69,7 @@ Rectangle {
 
     function resolveScreenName(): string {
         try {
-            const focused = UmbrielService.focusedMonitor
+            const focused = HyprlandService.focusedMonitor
             if (focused && ("" + focused).length > 0)
                 return "" + focused
         } catch (e) {}
@@ -87,9 +87,9 @@ Rectangle {
     }
 
     // ---- workspace model ----
-    // Umbriel reports ui ordinals (index/name 1..N) per output; the widget
-    // shows a group window of Theme.workspaceShown ordinals around the active
-    // one (showUnoccupied) or only occupied/active workspaces.
+    // Hyprland keeps persistent workspaces per output: the model follows the
+    // workspaces that actually exist for this output. Show unoccupied off
+    // narrows the list to occupied/active/urgent workspaces.
     function blankEntry(index: int, output: string): var {
         return {
             index: index,
@@ -106,9 +106,10 @@ Rectangle {
     }
 
     function collectReal(): var {
-        const mm = UmbrielService.monitors || {}
+        const mm = HyprlandService.monitors || {}
         const perMonitor = Theme.workspacePerMonitor
         const screen = root.screenName
+        const ignored = Theme.workspaceIgnoredTags
         const byIdx = {}
         const onScreen = {}
         for (let outName in mm) {
@@ -133,6 +134,8 @@ Rectangle {
                     e.active = true
                 if (w.occupied)
                     e.occupied = true
+                if (w.urgent)
+                    e.urgent = true
                 const nm = ("" + (w.name || "")).trim()
                 if (nm.length > 0)
                     e.name = nm
@@ -140,11 +143,30 @@ Rectangle {
                     e.output = outName
             }
         }
+        // PERF: one pass over the window list builds the urgent-index map
+        // (was one windowsOn() scan per workspace delegate, O(W x N)).
+        const urgentIdx = {}
+        const winList = HyprlandService.windows || []
+        for (let i = 0; i < winList.length; i++) {
+            const w = winList[i]
+            if (!w || !w.urgent || urgentIdx[w.index] === true)
+                continue
+            if (perMonitor && ("" + w.output) !== screen)
+                continue
+            if (ignored.indexOf(w.appId) !== -1)
+                continue
+            try {
+                if (HyprlandService.isShellWindow && HyprlandService.isShellWindow(w.appId, w.title))
+                    continue
+            } catch (e) {}
+            urgentIdx[w.index] = true
+        }
         const out = []
         for (let k in byIdx) {
             const e = byIdx[k]
             e.foreign = !perMonitor && onScreen[e.index] !== true
-            e.urgent = UmbrielService.workspaceUrgent(perMonitor ? screen : "", e.index, Theme.workspaceIgnoredTags)
+            if (urgentIdx[e.index] === true)
+                e.urgent = true
             out.push(e)
         }
         out.sort((a, b) => a.index - b.index)
@@ -153,9 +175,6 @@ Rectangle {
 
     function buildModel(): var {
         const real = collectReal()
-        const byIdx = {}
-        for (let i = 0; i < real.length; i++)
-            byIdx[real[i].index] = real[i]
         let activeIdx = -1
         for (let i = 0; i < real.length; i++) {
             if (real[i].active)
@@ -164,46 +183,30 @@ Rectangle {
         if (activeIdx < 0)
             activeIdx = real.length > 0 ? real[0].index : 1
 
-        let result = []
+        let result = real
         if (Theme.workspaceShowUnoccupied) {
-            // Caelestia: always show `shown` slots, offset to the active group.
-            const count = Theme.workspaceShown
-            const groupOffset = Math.floor((Math.max(1, activeIdx) - 1) / count) * count
-            for (let i = groupOffset + 1; i <= groupOffset + count; i++) {
-                const e = byIdx[i] || root.blankEntry(i, root.screenName)
-                e.shown = true
-                result.push(e)
-            }
+            for (let i = 0; i < result.length; i++)
+                result[i].shown = true
         } else {
-            // Only occupied/active/urgent workspaces, windowed around active.
-            const vis = []
+            const vis = {}
             for (let i = 0; i < real.length; i++) {
                 const e = real[i]
                 if (e.occupied || e.active || e.urgent)
-                    vis.push(e)
+                    vis[e.index] = true
             }
-            if (vis.length === 0)
-                vis.push(byIdx[activeIdx] || root.blankEntry(activeIdx, root.screenName))
-            const len = vis.length
-            let cur = 0
-            for (let i = 0; i < vis.length; i++) {
-                if (vis[i].active) {
-                    cur = i
-                    break
-                }
-            }
-            const count = Theme.workspaceShown
-            const end = Math.max(Math.min(count, len), Math.min(cur + 1, len))
-            const start = Math.max(0, end - count)
-            const inSlice = {}
-            for (let i = start; i < end; i++)
-                inSlice[vis[i].index] = true
             for (let i = 0; i < real.length; i++)
-                real[i].shown = inSlice[real[i].index] === true
-            result = real
+                real[i].shown = vis[real[i].index] === true
+        }
+        // Hyprland can briefly report no workspace on an output (all destroyed):
+        // keep one clickable slot so a workspace can be created again.
+        if (result.length === 0) {
+            const e = root.blankEntry(Math.max(1, activeIdx), root.screenName)
+            e.shown = true
+            result = [e]
         }
 
-        // Gap markers between non-consecutive slots (showUnoccupied off).
+        // Gap markers between non-consecutive shown slots: destroyed
+        // indexes in between, and filtering can leave holes.
         let prevShown = null
         for (let i = 0; i < result.length; i++) {
             const e = result[i]
@@ -212,7 +215,7 @@ Rectangle {
             if (!e.shown)
                 continue
             if (prevShown) {
-                if (!Theme.workspaceShowUnoccupied && prevShown.index !== e.index - 1)
+                if (prevShown.index !== e.index - 1)
                     e.gapBefore = true
                 e.prevActive = prevShown.active
             }
@@ -248,7 +251,7 @@ Rectangle {
     property var _winRank: ({})
     property int winRankRev: 0
     function reindexWindows(): void {
-        const list = UmbrielService.windows || []
+        const list = HyprlandService.windows || []
         const rank = _winRank
         let next = 0
         for (let k in rank)
@@ -288,7 +291,7 @@ Rectangle {
         return rank === undefined ? Number.MAX_SAFE_INTEGER : rank
     }
     Connections {
-        target: UmbrielService
+        target: HyprlandService
         // Rank fresh windows before the delegates sort by rank.
         function onWindowsChanged() { root.reindexWindows() }
     }
@@ -421,8 +424,8 @@ Rectangle {
     }
 
     // Output swaps snap (see _outputSnap). Keep the flag up long enough to
-    // cover both umbriel streams (workspaces then windows land ~1 ms apart)
-    // before trusting animations again.
+    // cover the workspace and window events (they land a few ms apart) before
+    // trusting animations again.
     Timer {
         id: outputSnapTimer
         interval: 60
@@ -478,7 +481,7 @@ Rectangle {
             width: band ? band.w : 0
             height: band ? band.h : 0
             radius: Math.min(width, height) / 2
-            color: Theme.surface_container_highest
+            color: Theme.panelCardHighest
             antialiasing: Theme.shapesAa
         }
     }
@@ -784,12 +787,18 @@ Rectangle {
         }
 
         readonly property var wsWindows: {
-            UmbrielService.windows
+            HyprlandService.windows
             const ws = workspace
             if (!ws || !root.iconsOn)
                 return []
             const target = Theme.workspacePerMonitor ? ("" + ws.output) : ""
-            const list = UmbrielService.windowsOn(target, ws.index, Theme.workspaceIgnoredTags)
+            let list = HyprlandService.windowsOn(target, ws.index, Theme.workspaceIgnoredTags)
+            // Defensive: never show the shell's own windows even if the
+            // service filter is out of sync (hides quickshell icons).
+            try {
+                if (HyprlandService.isShellWindow)
+                    list = list.filter(w => w && !HyprlandService.isShellWindow(w.appId, w.title))
+            } catch (e) {}
             // Stable icon slots: first-seen rank, not the compositor's
             // focus-ordered list (windowsOn returns a fresh array).
             list.sort((a, b) => root.windowRank(a) - root.windowRank(b))
@@ -920,7 +929,7 @@ Rectangle {
         }
     }
 
-    // Placeholder while the first Umbriel poll is in flight.
+    // Placeholder while the first Hyprland state sync is in flight.
     Text {
         anchors.centerIn: parent
         visible: root.workspaceModel.length === 0
@@ -962,7 +971,7 @@ Rectangle {
     function activateWorkspace(workspace: var): void {
         if (!workspace)
             return
-        UmbrielService.activateTag(workspace.index, workspace.output)
+        HyprlandService.activateTag(workspace.index, workspace.output)
     }
 
     function activateAt(px: real, py: real): bool {
@@ -975,8 +984,8 @@ Rectangle {
 
     function cycleWorkspace(down: bool): void {
         if (down)
-            UmbrielService.prevTag(root.screenName)
+            HyprlandService.prevTag(root.screenName)
         else
-            UmbrielService.nextTag(root.screenName)
+            HyprlandService.nextTag(root.screenName)
     }
 }

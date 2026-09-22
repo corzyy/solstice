@@ -31,7 +31,10 @@ if [ -z "$QS_BIN" ]; then
 fi
 [ -n "$QS_BIN" ] || { echo primary; exit 0; }
 
-"$QS_BIN" list --all 2>/dev/null | awk -v cfg="$CFG" -v self="$SELF" '
+# STABILITY: bounded — a hung quickshell registry lookup must not wedge the
+# caller (InstanceGuard kills the process after 3s, this keeps manual runs sane
+# too).
+timeout 3 "$QS_BIN" list --all 2>/dev/null | awk -v cfg="$CFG" -v self="$SELF" '
 # Evaluate the block collected so far.
 function consider() {
     if (path != cfg || pid == "") return

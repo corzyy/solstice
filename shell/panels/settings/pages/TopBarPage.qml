@@ -87,6 +87,7 @@ NexusControls.PageBase {
             onToggled: n => Theme.setBarPersistent(n)
         }
         NexusControls.ToggleRow {
+            visible: !Theme.barPersistent
             text: "Show on hover"
             subtext: "Reveal the bar when the cursor reaches the screen edge"
             checked: Theme.barShowOnHover
@@ -458,7 +459,6 @@ NexusControls.PageBase {
                 onApplied: v => Theme.setBarTopDistance(Math.round(v))
             }
             NexusControls.SliderRow {
-                last: true
                 icon: "󰖔"
                 tint: Theme.tertiary
                 label: "Side padding"
@@ -470,8 +470,20 @@ NexusControls.PageBase {
                 onMoved: v => Theme.setBarEdgeDistance(Math.round(v))
                 onApplied: v => Theme.setBarEdgeDistance(Math.round(v))
             }
+            NexusControls.SliderRow {
+                last: true
+                icon: "󰖔"
+                label: "Display Radius"
+                from: 0
+                to: 40
+                stepSize: 1
+                unit: "px"
+                value: Theme.barDisplayRadius
+                onMoved: v => Theme.setBarDisplayRadius(Math.round(v))
+                onApplied: v => Theme.setBarDisplayRadius(Math.round(v))
+            }
             NexusControls.Note {
-                text: "Screen gap lifts the bar off the edge it is anchored to; side padding insets its ends from the screen edges."
+                text: "Screen gap lifts the bar off the edge it is anchored to; side padding insets its ends from the screen edges. Display Radius carves concave coves into the underside of a docked bar where it meets the screen edges, like the panel fillets — match it with Appearance > Rounding. 0 keeps a plain square bar."
             }
         }
     }

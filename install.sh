@@ -89,9 +89,8 @@ else
     SRC=""
     echo "Cloning $REPO ($REF) ..."
     SRC="$(mktemp -d "${TMPDIR:-/tmp}/solstice-install.XXXXXX")"
-    cleanup_src() { [[ -n "$SRC" && "$SRC" == /tmp/* ]] && rm -rf "$SRC"; }
-    trap cleanup_src EXIT INT TERM
-    if ! git clone --depth 1 --branch "$REF" "$REPO" "$SRC"; then
+    SRC_TMP="$SRC"
+    if ! timeout 300 git clone --depth 1 --branch "$REF" "$REPO" "$SRC"; then
         echo "git clone failed." >&2
         exit 1
     fi
@@ -111,8 +110,26 @@ fi
 
 PARENT="$(dirname "$DEST")"
 mkdir -p "$PARENT"
+# STABILITY: serialize concurrent install/update runs — two runs swapping the
+# same $DEST can leave a partial install behind.
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"$PARENT/.solstice-install.lock"
+    if ! flock -n 9; then
+        echo "Another solstice install/update is already running — aborting." >&2
+        exit 1
+    fi
+fi
 TMP="$(mktemp -d "$PARENT/.solstice-install.XXXXXX")"
-cleanup() { rm -rf "$TMP"; }
+cleanup() {
+    # STABILITY: an interrupt between the two swap renames leaves the previous
+    # install in $TMP/old with $DEST missing. Restore it before removing the
+    # staging dir — the old install is otherwise unrecoverable.
+    if [[ -n "${TMP:-}" && -d "$TMP/old" && ! -e "$DEST" ]]; then
+        mv "$TMP/old" "$DEST" 2>/dev/null || true
+    fi
+    [[ -n "${TMP:-}" ]] && rm -rf "$TMP"
+    [[ -n "${SRC_TMP:-}" ]] && rm -rf "$SRC_TMP"
+}
 trap cleanup EXIT INT TERM
 
 # Preserve user-owned state across (re)installs.
@@ -152,22 +169,33 @@ if ! mv "$TMP/repo" "$DEST"; then
     exit 1
 fi
 
+# STABILITY: copy into a sibling, then rename. The old `rm -rf` + copy lost
+# the user's config if the script died in between.
 if [[ -d "$KEEP/backend/config" ]]; then
-    rm -rf "$DEST/backend/config"
-    cp -a "$KEEP/backend/config" "$DEST/backend/config"
+    rm -rf "$DEST/backend/config.new"
+    cp -a "$KEEP/backend/config" "$DEST/backend/config.new"
+    rm -rf "$DEST/backend/config.old"
+    [[ -d "$DEST/backend/config" ]] && mv "$DEST/backend/config" "$DEST/backend/config.old"
+    mv "$DEST/backend/config.new" "$DEST/backend/config"
+    rm -rf "$DEST/backend/config.old"
 fi
 if [[ -d "$KEEP/style/themes/snapshots" ]]; then
     mkdir -p "$DEST/style/themes"
-    rm -rf "$DEST/style/themes/snapshots"
-    cp -a "$KEEP/style/themes/snapshots" "$DEST/style/themes/snapshots"
+    rm -rf "$DEST/style/themes/snapshots.new"
+    cp -a "$KEEP/style/themes/snapshots" "$DEST/style/themes/snapshots.new"
+    rm -rf "$DEST/style/themes/snapshots.old"
+    [[ -d "$DEST/style/themes/snapshots" ]] && mv "$DEST/style/themes/snapshots" "$DEST/style/themes/snapshots.old"
+    mv "$DEST/style/themes/snapshots.new" "$DEST/style/themes/snapshots"
+    rm -rf "$DEST/style/themes/snapshots.old"
 fi
 
 chmod +x "$DEST/backend/scripts/"*.sh "$DEST/backend/scripts/solstice" 2>/dev/null || true
 
-# Expose the CLI as `solstice` in PATH. Umbriel's autostart ("solstice start")
-# and every shell keybind ("spawn:solstice module …") go through this symlink.
-# Refreshed on every install so a moved script can never leave it dangling.
-# Skipped for test installs (SOLSTICE_DEST), which must not repoint the live CLI.
+# Expose the CLI as `solstice` in PATH. Hyprland's autostart ("solstice start")
+# and every shell keybind ("solstice module …") go through this
+# symlink. Refreshed on every install so a moved script can never leave it
+# dangling. Skipped for test installs (SOLSTICE_DEST), which must not repoint
+# the live CLI.
 if [[ -z "${SOLSTICE_DEST:-}" ]]; then
     BIN_DIR="$HOME/.local/bin"
     mkdir -p "$BIN_DIR"
@@ -192,14 +220,16 @@ fi
 
 echo ""
 echo "solstice installed to $DEST"
+echo "For autostart, add this to ~/.config/hypr/configs/autostart.lua:"
+echo '  hl.exec_cmd("solstice start")'
 
 if ((NO_START)); then
     echo "Start it with:  solstice start   (or: qs -d -c solstice)"
 elif [[ -n "${SOLSTICE_DEST:-}" ]]; then
     echo "Done. (Test install — shell not started.)"
 elif command -v quickshell >/dev/null 2>&1; then
-    if quickshell ipc -c solstice call solstice reload >/dev/null 2>&1 \
-       || "$DEST/backend/scripts/solstice" start >/dev/null 2>&1; then
+    if timeout 10 quickshell ipc -c solstice call solstice reload >/dev/null 2>&1 \
+       || timeout 15 "$DEST/backend/scripts/solstice" start >/dev/null 2>&1; then
         echo "Shell started."
     else
         echo "Installed. Start it manually with:  solstice start"

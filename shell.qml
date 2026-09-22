@@ -2,6 +2,7 @@
 //@ pragma IconTheme Papirus
 
 import Quickshell
+import Quickshell.Hyprland
 import "./style/themes"
 import "./backend/services"
 import QtQuick
@@ -52,7 +53,10 @@ ShellRoot {
         interval: 1200; running: true; repeat: false
         onTriggered: {
             if (wallpaperGuardProc.running) return
-            let cmd = "pgrep -x swaybg >/dev/null 2>&1 && exit 0;"
+            // STABILITY: only restore through swaybg when no wallpaper daemon
+            // is running at all. A user-managed awww/hyprpaper/swww session
+            // must not get a second daemon fighting it for the output.
+            let cmd = "for p in swaybg awww-daemon hyprpaper swww-daemon wbg; do pgrep -x \"$p\" >/dev/null 2>&1 && exit 0; done;"
             cmd += " WALL=\"$(cat ~/.config/quickshell/solstice/backend/config/current_wallpaper.txt 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/swaybg/current 2>/dev/null | tr -d '\\r\\n')\";"
             cmd += " [ -f \"$WALL\" ] || WALL=\"$(cat ~/.cache/awww/current 2>/dev/null | tr -d '\\r\\n')\";"
@@ -91,7 +95,7 @@ ShellRoot {
             onNotification: notification => {
                 // CRASH FIX: snapshot only plain types. Never store
                 // notification.actions (QObjects) — dangling actions crash
-                // CalendarPanel Repeaters in QV4::fromData on open.
+                // NotificationCenterPanel Repeaters in QV4::fromData on open.
                 // HistoryService.add() sanitizes again as defense-in-depth.
                 try {
                     HistoryService.add({
@@ -134,7 +138,7 @@ ShellRoot {
     QtObject {
         id: panel
         readonly property int none: 0
-        readonly property int calendar: 1
+        readonly property int notificationCenter: 1
         // 2 was settings: no longer an exclusive panel (see settingsVisible).
         readonly property int systemTray: 3
         readonly property int controlCenter: 4
@@ -158,7 +162,7 @@ ShellRoot {
     // the left), true = SUPER+SPACE (centred under the bar).
     property bool launcherCentered: false
 
-    readonly property bool calendarVisible: activePanel === panel.calendar
+    readonly property bool notificationCenterVisible: activePanel === panel.notificationCenter
     readonly property bool systemTrayVisible: activePanel === panel.systemTray
     readonly property bool controlCenterVisible: activePanel === panel.controlCenter
     readonly property bool audioVisible: activePanel === panel.audio
@@ -204,6 +208,18 @@ ShellRoot {
         activePanel = panel.none
     }
 
+    // Hyprland: keep the taskbar clickable while a panel is open (panels
+    // use OnDemand there, see HyprlandService window registries). The bar
+    // and the open panel are whitelisted, so bar clicks land on the bar
+    // (one-click toggle/switch) while any other outside click clears the
+    // grab and dismisses. Inert on other compositors (isHyprland guard).
+    HyprlandFocusGrab {
+        id: panelGrab
+        active: HyprlandService.isHyprland && root.activePanel !== panel.none
+        windows: HyprlandService.grabWindows
+        onCleared: root.closePanels()
+    }
+
     // Geteilte Loader-Hülle für Panels (10x identisches active/async-Muster).
     // Der Loader lebt während der Exit-Animation weiter (hold): sonst würde
     // active:false das Panel sofort zerstören und die Close-Animation wäre
@@ -237,16 +253,18 @@ ShellRoot {
     // dreier kopierter Zuordnungsstellen: IpcHandler, onClosePanel).
     // Settings has no entry: it is not part of the exclusive panel state.
     readonly property var panelForName: ({
-        calendar: panel.calendar,
+        notificationcenter: panel.notificationCenter,
+        // Compat alias: the panel used to be called "calendar".
+        calendar: panel.notificationCenter,
         systemtray: panel.systemTray,
         controlcenter: panel.controlCenter,
         audio: panel.audio,
         bluetoothmenu: panel.bluetoothMenu, updatesmenu: panel.updatesMenu,
         launcher: panel.launcher, power: panel.power
     })
-    // Bar-Modul-IDs weichen teils ab (clock->calendar).
+    // Bar-Modul-IDs weichen teils ab (clock->notificationcenter).
     readonly property var panelForModule: ({
-        clock: panel.calendar,
+        clock: panel.notificationCenter,
         systemtray: panel.systemTray,
         controlcenter: panel.controlCenter,
         launcher: panel.launcher
@@ -265,7 +283,7 @@ ShellRoot {
     // The ids match each panel popout's `morphId` (= BarAnchor moduleId).
     // Settings is not bar-anchored and keeps its own run.
     readonly property var panelMorphId: ({
-        [panel.calendar]: "clock",
+        [panel.notificationCenter]: "clock",
         [panel.systemTray]: "systemtray",
         [panel.controlCenter]: "controlcenter",
         [panel.audio]: "audio",
@@ -381,13 +399,13 @@ ShellRoot {
     // per-panel booleans fanning out through TopBar.
 
     Bar.TopBar {
-        calendarOpen: root.calendarVisible
+        notificationCenterOpen: root.notificationCenterVisible
         trayOpen: root.systemTrayVisible
         controlCenterOpen: root.controlCenterVisible
         launcherOpen: root.launcherVisible
         anyPanelOpen: root.activePanel !== panel.none
 
-        onToggleCalendar: root.toggleExclusive(panel.calendar)
+        onToggleNotificationCenter: root.toggleExclusive(panel.notificationCenter)
         onToggleSystemTray: root.toggleExclusive(panel.systemTray)
         onToggleControlCenter: root.toggleExclusive(panel.controlCenter)
         onToggleLauncher: root.toggleLauncher(false)
@@ -401,14 +419,21 @@ ShellRoot {
         }
     }
 
+    // Dock (Panels > Dock): resident like the bar, visibility driven by
+    // Theme.dockEnabled. The launcher button toggles the launcher panel.
+    Panels.DockPanel {
+        onRequestLauncher: root.toggleLauncher(false)
+    }
+
     function openSettings(section: string): void {
         let s = (section || "wallpaper").trim() || "wallpaper"
         // Legacy ids: bar/modules and notif all point at the Panels page now
         // (notifications + OSDs are a Panels sub-page); theming now lives in
-        // the Apps page's library.
+        // the Apps page's library; niri was renamed to hyprland.
         if (s === "bar" || s === "modules" || s === "notif") s = "panels"
         else if (s === "theming") s = "apps"
-        let valid = ["wallpaper", "global", "umbriel", "audio", "apps", "panels", "network", "bluetooth", "about", "setup"]
+        else if (s === "niri") s = "hyprland"
+        let valid = ["wallpaper", "global", "hyprland", "audio", "apps", "panels", "network", "bluetooth", "about", "setup"]
         if (valid.indexOf(s) === -1) s = "wallpaper"
         settingsSection = s
         if (settingsLoader.item) settingsLoader.item.section = s
@@ -473,7 +498,7 @@ ShellRoot {
     IpcHandler {
         target: "solstice"
         function state(): string {
-            return "calendar=" + root.calendarVisible
+            return "notificationcenter=" + root.notificationCenterVisible
             + " settings=" + root.settingsVisible
             + " systemtray=" + root.systemTrayVisible
             + " controlcenter=" + root.controlCenterVisible
@@ -483,8 +508,12 @@ ShellRoot {
             + " launcher=" + root.launcherVisible
             + " power=" + root.powerVisible
         }
-        function toggleCalendar(): void { root.toggleNamedPanel("calendar") }
-        function showCalendar(): void { root.showNamedPanel("calendar") }
+        function toggleNotificationCenter(): void { root.toggleNamedPanel("notificationcenter") }
+        function showNotificationCenter(): void { root.showNamedPanel("notificationcenter") }
+        function hideNotificationCenter(): void { root.closePanels() }
+        // Compat aliases: the panel used to be called "calendar".
+        function toggleCalendar(): void { root.toggleNamedPanel("notificationcenter") }
+        function showCalendar(): void { root.showNamedPanel("notificationcenter") }
         function hideCalendar(): void { root.closePanels() }
         function toggleControlCenter(): void { root.toggleNamedPanel("controlcenter") }
         function showControlCenter(): void { root.showNamedPanel("controlcenter") }
@@ -515,6 +544,9 @@ ShellRoot {
         function toggleScreenshot(): void { root.toggleScreenshot() }
         function showScreenshot(): void { root.showScreenshot() }
         function hideScreenshot(): void { root.hideScreenshot() }
+        function toggleDock(): void { Theme.setDockEnabled(!Theme.dockEnabled) }
+        function showDock(): void { Theme.setDockEnabled(true) }
+        function hideDock(): void { Theme.setDockEnabled(false) }
         function reload(): void { Quickshell.reload(true) }
     }
 
@@ -522,11 +554,11 @@ ShellRoot {
         notifServer: root.notifServer
     }
 
-    PanelLoader { id: calLoader; shown: root.calendarVisible; sourceComponent: calComp }
+    PanelLoader { id: centerLoader; shown: root.notificationCenterVisible; sourceComponent: centerComp }
     Component {
-        id: calComp
-        Panels.CalendarPanel {
-            showCalendar: root.calendarVisible
+        id: centerComp
+        Panels.NotificationCenterPanel {
+            showNotifications: root.notificationCenterVisible
             notifServer: root.notifServer
             onDismissed: root.closePanels()
         }

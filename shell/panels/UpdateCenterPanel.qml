@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "../../style/themes"
+import "../../backend/services"
 import "../../style/ui"
 
 Scope {
@@ -11,9 +12,10 @@ Scope {
     property bool showUpdates: false
     signal dismissed()
     // CC drill-in mode: the view leads with a back header and the card
-    // settles under the control-center anchor, so it morphs out of / back
-    // into the CC card (shell.qml updatesmenu panel). The standalone bar
-    // panel keeps the close button.
+    // settles under the control-center anchor, growing out of / shrinking
+    // back into the clicked updates tile via the container transform
+    // (shell.qml updatesmenu panel). The standalone bar panel keeps the
+    // close button.
     property bool showBack: false
     signal backRequested()
     property string panelModuleId: "updates"
@@ -23,7 +25,6 @@ Scope {
     onShowUpdatesChanged: {
         if (showUpdates) { _winVisible = true; hideTimer.stop() } else hideTimer.restart()
     }
-    readonly property string barPos: Theme.barPosition
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
 
     Variants {
@@ -37,7 +38,11 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "updatecenter"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
             Item {
                 anchors.fill: parent
                 focus: true
@@ -58,11 +63,13 @@ Scope {
             PanelShell {
                 moduleId: scope.panelModuleId
                 anchorModuleId: scope.anchorModuleId
+                // Container transform: the tile replica glides into the view
+                // header while the card grows out of the tile.
+                morphTarget: updateView.headerItem
                 // Drill-in mode settles below the CC header/tile row: the CC
                 // stays open and dimmed behind this card.
                 edgeInset: scope.showBack ? Theme.panelDrillInInset : 0
                 screenActive: Theme.isPrimaryScreen(modelData)
-                barPos: scope.barPos
                 panelGap: scope.panelGap
                 shown: scope.showUpdates
                 boxWidth: scope.showBack ? 360 : 410
@@ -71,6 +78,7 @@ Scope {
                 heightPadding: 32
 
                 UpdateCenterView {
+                    id: updateView
                     active: scope.showUpdates
                     showBack: scope.showBack
                     onCloseRequested: scope.dismissed()

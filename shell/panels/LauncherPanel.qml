@@ -61,7 +61,6 @@ Scope {
     }
     Component.onDestruction: WallpaperService.endWallpaperPreview()
 
-    readonly property string barPos: Theme.barPosition
     // Attached-bar morph: tuck under the bar edge (see Theme.panelAttachOverlap).
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
     readonly property int panelWidth: Theme.launcherWidth
@@ -74,7 +73,7 @@ Scope {
     // Picking the Wallpaper entry from the prefix menu autocompletes to
     // "<prefix>wallpaper " (Caelestia's ">wallpaper " action) and opens the
     // carousel; "<prefix>wallpaper " typed directly enters it too. There the
-    // search bar hides and the card is owned by the cover-flow view:
+    // search bar hides and the card is owned by the prototype carousel:
     // left/right (and up/down, wheel) steer, Enter/click commits, Esc
     // dismisses. Highlighting
     // previews the wallpaper live (plus Monet when the wallpaper engine is
@@ -99,11 +98,23 @@ Scope {
         if (!t.startsWith(launcherScope.wallpaperPrefix)) return ""
         return t.substring(launcherScope.wallpaperPrefix.length).trim().toLowerCase()
     }
-    readonly property int wallpaperItemWidth: 264
-    // Carousel card height: thumbnail (135) + label + margins with a little
-    // breathing room for the ring and hover ripple. Caelestia uses a shorter
-    // launcher height for wallpapers than for the app list.
-    readonly property int wallpaperPanelHeight: 220
+    // Prototype carousel geometry: focused card 356x200 (16:9),
+    // neighbours 200 (1:1), distant cards 113 (9:16) at height 200,
+    // 8px gaps, centre travel 286px -> centerNorm ±1.
+    readonly property int wallpaperFocusWidth: 356
+    readonly property int wallpaperNeighbourWidth: 200
+    readonly property int wallpaperDistantWidth: 113
+    readonly property int wallpaperCardHeight: 200
+    readonly property int wallpaperCenterRange: 286
+    readonly property int wallpaperGap: 8
+    // Parallax overscan per side for the carousel thumbnails (see
+    // CarouselParallaxImage): the image bleeds past the 356px focused
+    // card and pans against the scroll direction while browsing
+    // (prototype: 71, ±142px of travel — deliberately prominent).
+    readonly property int wallpaperParallaxPad: 71
+    // Carousel panel height: 200px cards + 24px list margins per side
+    // (prototype's 1062x248 stage).
+    readonly property int wallpaperPanelHeight: 248
     // Folder rules mirror WallpaperService.firstForTheme: root-level files
     // count for every engine, the monet folders ("monet", legacy
     // "nonthemed") belong to the wallpaper engine and every other folder
@@ -824,6 +835,15 @@ Scope {
     function pageX(slot: int, cardWidth: real): real {
         return launcherScope.pageOffset(slot) * cardWidth
     }
+    // Fade companion to the slide: 1 on screen, 0 parked/exited. Driven by
+    // the same pageProgress run, so the slide keeps its motion and the pages
+    // cross-fade on top of it.
+    function pageOpacity(slot: int): real {
+        const a = Math.abs(launcherScope.pageOffset(slot))
+        if (a >= 0.999) return 0
+        if (a <= 0.001) return 1
+        return 1 - a
+    }
     function snapPageSlide(): void {
         pageSlideAnim.stop()
         launcherScope.pageStart = ({})
@@ -911,17 +931,28 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "launcher"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-            // Wallpaper carousel width: as many 264px slots as fit the
-            // screen, forced odd so the current wallpaper sits centred
-            // (Caelestia's WallpaperList numItems, capped at maxWallpapers).
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
+            // Wallpaper carousel width: prototype slots — 356 focused,
+            // 200 neighbours, 113 distant, 8px gaps, 24px list margins
+            // per side. 5 slots: 1014 content + 48 chrome = 1062;
+            // 3 slots: 772 + 48 = 820; 1 slot: 356 + 48 = 404.
+            // Forced odd so the current wallpaper sits centred.
             readonly property int wallpaperVisible: {
-                let n = Math.floor(Math.max(launcherScope.wallpaperItemWidth, width - 48) / launcherScope.wallpaperItemWidth)
-                n = Math.max(1, Math.min(5, n))
-                if (n > 1 && n % 2 === 0) n--
-                return n
+                if (width >= 1062) return 5
+                if (width >= 820) return 3
+                return 1
             }
-            readonly property real wallpaperWidth: wallpaperVisible * launcherScope.wallpaperItemWidth + 24
+            readonly property real wallpaperWidth: {
+                const n = launcherWindow.wallpaperVisible
+                let content = launcherScope.wallpaperFocusWidth
+                if (n >= 3) content += 2 * (launcherScope.wallpaperNeighbourWidth + launcherScope.wallpaperGap)
+                if (n >= 5) content += 2 * (launcherScope.wallpaperDistantWidth + launcherScope.wallpaperGap)
+                return content + 48
+            }
             // Disabled while closing: during a morph handoff the outgoing
             // window stays mapped for panelHideDelay and must not eat the
             // click that belongs to the panel now on top.
@@ -936,17 +967,13 @@ Scope {
                 shown: launcherScope.showLauncher
                 morphId: "launcher"
                 morphActive: Theme.isPrimaryScreen(modelData)
-                barPos: launcherScope.barPos
                 // The carousel widens and flattens the card while browsing
                 // wallpapers; the popout glides between the two sizes.
                 fullWidth: launcherScope.wallpaperMode ? launcherWindow.wallpaperWidth : launcherScope.panelWidth
                 fullHeight: launcherScope.wallpaperMode ? launcherScope.wallpaperPanelHeight : launcherScope.panelHeight
-                anchorCenter: launcherAnchor.isVertical ? launcherAnchor.cy : launcherAnchor.cx
-                edge: launcherScope.barPos === "bottom" ? launcherAnchor.panelY + launcherPopout.fullHeight
-                    : launcherScope.barPos === "right" ? launcherAnchor.panelX + launcherPopout.fullWidth
-                    : launcherScope.barPos === "left" ? launcherAnchor.panelX
-                    : launcherAnchor.panelY
-                screenSize: launcherAnchor.isVertical ? launcherAnchor.screenHeight : launcherAnchor.screenWidth
+                anchorCenter: launcherAnchor.cx
+                edge: launcherAnchor.panelY
+                screenSize: launcherAnchor.screenWidth
                 margin: launcherAnchor.margin
 
                 BarAnchor {
@@ -954,8 +981,7 @@ Scope {
                     // Empty id while centred: BarAnchor falls back to the
                     // screen middle. Icon clicks anchor to the bar module.
                     moduleId: launcherScope.centered ? "" : "launcher"
-                    barPos: launcherScope.barPos
-                    panelWidth: launcherPopout.fullWidth
+                        panelWidth: launcherPopout.fullWidth
                     panelHeight: launcherPopout.fullHeight
                     screenWidth: launcherPopout.parent.width
                     screenHeight: launcherPopout.parent.height
@@ -975,17 +1001,17 @@ Scope {
                     border.color: Theme.panelBorderColor
                     border.width: 2
                     // Bar-side corners square, free corners rounded (fused joint).
-                    topLeftRadius: launcherScope.barPos === "top" || launcherScope.barPos === "left" ? 0 : launcherPopout.frameRadius
-                    topRightRadius: launcherScope.barPos === "top" || launcherScope.barPos === "right" ? 0 : launcherPopout.frameRadius
-                    bottomLeftRadius: launcherScope.barPos === "bottom" || launcherScope.barPos === "left" ? 0 : launcherPopout.frameRadius
-                    bottomRightRadius: launcherScope.barPos === "bottom" || launcherScope.barPos === "right" ? 0 : launcherPopout.frameRadius
+                    topLeftRadius: 0
+                    topRightRadius: 0
+                    bottomLeftRadius: launcherPopout.frameRadius
+                    bottomRightRadius: launcherPopout.frameRadius
                     clip: false
                     // Seam strip: erases the collar outline along the fused edge.
                     Rectangle {
                         antialiasing: Theme.shapesAa
                         visible: Theme.panelAccentBorder
                         x: 0
-                        y: launcherScope.barPos === "bottom" ? launcherCard.height - 2 : 0
+                        y: 0
                         width: launcherCard.width
                         height: 2
                         color: Theme.panelWindowBg
@@ -1110,6 +1136,7 @@ Scope {
                             // so the wallpaper/web app/emoji owners still win
                             // the result area.
                             visible: launcherScope.pageVisible(launcherScope.pageApps)
+                            opacity: launcherScope.pageOpacity(launcherScope.pageApps)
                             transform: Translate { x: launcherScope.pageX(launcherScope.pageApps, appList.width) }
                             anchors.top: parent.top
                             anchors.left: parent.left
@@ -1119,7 +1146,8 @@ Scope {
                             anchors.bottomMargin: 10
                             clip: true
                             spacing: 2
-                            boundsBehavior: Flickable.StopAtBounds
+                            boundsBehavior: Flickable.DragAndOvershootBounds
+                            boundsMovement: Flickable.FollowBoundsBehavior
                             reuseItems: true
                             cacheBuffer: 400
                             model: launcherScope.results
@@ -1225,10 +1253,20 @@ Scope {
                                 }
                             }
                         }
+                        EdgeFade {
+                            flick: appList
+                            visible: launcherScope.pageVisible(launcherScope.pageApps)
+                            opacity: launcherScope.pageOpacity(launcherScope.pageApps)
+                            transform: Translate { x: launcherScope.pageX(launcherScope.pageApps, appList.width) }
+                        }
                         ScrollIndicator {
                             flick: appList
                             show: launcherScope.pageVisible(launcherScope.pageApps)
+                            opacity: launcherScope.pageOpacity(launcherScope.pageApps)
                             transform: Translate { x: launcherScope.pageX(launcherScope.pageApps, appList.width) }
+                        }
+                        OverscrollSpring {
+                            flick: appList
                         }
 
                         // ---- web app manager (prefix menu page) ----------
@@ -1254,6 +1292,7 @@ Scope {
                         Column {
                             anchors.centerIn: appList
                             visible: launcherScope.pageVisible(launcherScope.pageApps) && appList.count === 0
+                            opacity: launcherScope.pageOpacity(launcherScope.pageApps)
                             transform: Translate { x: launcherScope.pageX(launcherScope.pageApps, appList.width) }
                             spacing: 6
                             Text {
@@ -1278,17 +1317,20 @@ Scope {
                             }
                         }
 
-                        // ---- wallpaper carousel (Caelestia WallpaperList) ---
-                        // Cover-flow PathView over the scanned wallpapers: the
-                        // current item is centred and scaled up, neighbours
-                        // fall back/forward along the path. Highlighting
-                        // previews the wallpaper live (WallpaperService
-                        // preview, reverted when the view is left without a
-                        // pick); Enter or a click commits it.
+                        // ---- wallpaper carousel (prototype port) ---
+                        // Centered ListView over the scanned wallpapers:
+                        // the current card is large (356x200), neighbours
+                        // shrink (200, then 113) and every thumbnail pans
+                        // against the scroll direction (parallax) via
+                        // centerNorm. Highlighting previews the wallpaper
+                        // live (WallpaperService preview, reverted when the
+                        // view is left without a pick); Enter or a click
+                        // commits it.
                         Item {
                             id: wallpaperStage
                             // Page strip slot 1: slides with the rest.
                             visible: launcherScope.pageVisible(launcherScope.pageWallpaper)
+                            opacity: launcherScope.pageOpacity(launcherScope.pageWallpaper)
                             transform: Translate { x: launcherScope.pageX(launcherScope.pageWallpaper, wallpaperStage.width) }
                             anchors.top: parent.top
                             anchors.left: parent.left
@@ -1296,37 +1338,30 @@ Scope {
                             // The search bar is hidden in the carousel, so
                             // the stage uses the whole card.
                             anchors.bottom: parent.bottom
-                            anchors.margins: 12
                             clip: true
 
-                            PathView {
+                            ListView {
                                 id: wallpaperView
                                 anchors.fill: parent
+                                anchors.margins: 24
                                 clip: true
                                 model: launcherScope.wallpaperResults
-                                pathItemCount: launcherWindow.wallpaperVisible
-                                cacheItemCount: 4
-                                snapMode: PathView.SnapToItem
-                                preferredHighlightBegin: 0.5
-                                preferredHighlightEnd: 0.5
-                                highlightRangeMode: PathView.StrictlyEnforceRange
+                                orientation: ListView.Horizontal
+                                spacing: launcherScope.wallpaperGap
+                                boundsBehavior: Flickable.StopAtBounds
+                                snapMode: ListView.SnapToItem
+                                highlightRangeMode: ListView.StrictlyEnforceRange
                                 // Auto repositions (entry, model/query changes)
                                 // snap: the built-in highlight glide would play
                                 // on top of the page slide as a second, slower
                                 // horizontal run and read as the carousel
                                 // catching up with itself. Steering still
-                                // glides. syncToCurrent() raises `_snapSync`
-                                // for its currentIndex write.
+                                // glides (prototype: 600ms). syncToCurrent()
+                                // raises `_snapSync` for its currentIndex write.
                                 property bool _snapSync: false
-                                highlightMoveDuration: _snapSync ? 0 : Theme.durNormal
-
-                                path: Path {
-                                    startY: wallpaperView.height / 2
-                                    PathAttribute { name: "z"; value: 0 }
-                                    PathLine { x: wallpaperView.width / 2; relativeY: 0 }
-                                    PathAttribute { name: "z"; value: 1 }
-                                    PathLine { x: wallpaperView.width; relativeY: 0 }
-                                }
+                                highlightMoveDuration: _snapSync ? 0 : Theme.durLarge
+                                preferredHighlightBegin: (width - launcherScope.wallpaperFocusWidth) / 2
+                                preferredHighlightEnd: preferredHighlightBegin
 
                                 onCurrentItemChanged: {
                                     if (!launcherScope.wallpaperMode) return
@@ -1363,89 +1398,89 @@ Scope {
                                     Qt.callLater(() => _snapSync = false)
                                 }
 
-                                delegate: Item {
+                                delegate: CarouselCard {
                                     id: wpItem
-                                    required property var modelData
-                                    required property int index
+                                    view: wallpaperView
+                                    focusedWidth: launcherScope.wallpaperFocusWidth
+                                    neighbourWidth: launcherScope.wallpaperNeighbourWidth
+                                    distantWidth: launcherScope.wallpaperDistantWidth
+                                    cardHeight: launcherScope.wallpaperCardHeight
+                                    centerRange: launcherScope.wallpaperCenterRange
                                     readonly property string wpPath: wpItem.modelData ? String(wpItem.modelData.path || "") : ""
                                     readonly property string wpName: wpItem.modelData ? String(wpItem.modelData.name || "") : ""
-                                    readonly property bool current: PathView.isCurrentItem
-                                    width: launcherScope.wallpaperItemWidth
-                                    implicitHeight: wpContent.implicitHeight
-                                    height: implicitHeight
-                                    scale: wpItem.current ? 1 : PathView.onPath ? 0.82 : 0.5
-                                    opacity: PathView.onPath ? 1 : 0
-                                    z: PathView.z ?? 0
-                                    Behavior on scale { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial } }
-                                    Behavior on opacity { enabled: Theme.animationsEnabled; NumberAnimation { duration: Theme.durDefaultEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultEffects } }
 
-                                    Column {
-                                        id: wpContent
+                                    // Thumbnail card (prototype): dark
+                                    // placeholder, parallax image panning
+                                    // against the scroll, filename pill on
+                                    // the current card only.
+                                    ClipRect {
+                                        anchors.fill: parent
+                                        radius: 20
+                                        color: Theme.panelCardHighest
+                                        antialiasing: Theme.shapesAa
+                                        CarouselParallaxImage {
+                                            id: wpImage
+                                            // Binding-safe thumb fallback (see WallpaperStylesPage).
+                                            property string brokenThumb: ""
+                                            height: parent.height
+                                            fullWidth: launcherScope.wallpaperFocusWidth + 2 * launcherScope.wallpaperParallaxPad
+                                            parallaxPad: launcherScope.wallpaperParallaxPad
+                                            centerNorm: wpItem.centerNorm
+                                            source: brokenThumb === wpItem.wpPath
+                                                ? WallpaperService.originalUrl(wpItem.wpPath)
+                                                : WallpaperService.imageUrl(wpItem.wpPath)
+                                            sourceSize: Qt.size(Math.round(width * 1.5), Math.round(height * 1.5))
+                                            cache: true
+                                            smooth: !wallpaperView.moving
+                                            mipmap: Theme.imageMipmap
+                                            onStatusChanged: if (status === Image.Error && brokenThumb !== wpItem.wpPath) brokenThumb = wpItem.wpPath
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            visible: wpImage.status !== Image.Ready
+                                            text: "󰸉"
+                                            font.family: Theme.iconFontFamily
+                                            font.pixelSize: Theme.fs(28)
+                                            color: Theme.textMuted
+                                            antialiasing: Theme.textAa
+                                            renderType: Theme.textRenderType
+                                        }
+                                    }
+
+                                    // Filename pill (prototype): frosted dark,
+                                    // top-left, fades in on the current card.
+                                    Rectangle {
+                                        anchors.top: parent.top
                                         anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        spacing: 8
+                                        anchors.margins: 8
+                                        width: Math.min(pillText.implicitWidth + 16, wpItem.width - 16)
+                                        implicitHeight: pillText.implicitHeight + 12
+                                        radius: height / 2
+                                        color: "#cc36363c"
+                                        opacity: wpItem.isCurrent ? 1.0 : 0.0
+                                        visible: opacity > 0.01
 
-                                        Item {
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            width: 240
-                                            height: 135
-
-                                            Rectangle {
-                                                id: wpThumb
-                                                anchors.fill: parent
-                                                radius: 16
-                                                color: Theme.panelCardHighest
-                                                clip: true
-                                                antialiasing: Theme.shapesAa
-                                                Image {
-                                                    id: wpImage
-                                                    // Binding-safe thumb fallback (see WallpaperStylesPage).
-                                                    property string brokenThumb: ""
-                                                    anchors.fill: parent
-                                                    source: brokenThumb === wpItem.wpPath
-                                                        ? WallpaperService.originalUrl(wpItem.wpPath)
-                                                        : WallpaperService.imageUrl(wpItem.wpPath)
-                                                    sourceSize: Qt.size(Math.round(width * 1.5), Math.round(height * 1.5))
-                                                    fillMode: Image.PreserveAspectCrop
-                                                    asynchronous: true
-                                                    smooth: !wallpaperView.moving
-                                                    mipmap: Theme.imageMipmap
-                                                    onStatusChanged: if (status === Image.Error && brokenThumb !== wpItem.wpPath) brokenThumb = wpItem.wpPath
-                                                }
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    visible: wpImage.status !== Image.Ready
-                                                    text: "󰸉"
-                                                    font.family: Theme.iconFontFamily
-                                                    font.pixelSize: Theme.fs(28)
-                                                    color: Theme.textMuted
-                                                    antialiasing: Theme.textAa
-                                                    renderType: Theme.textRenderType
-                                                }
-                                            }
-                                            // Ring on the centred item.
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                anchors.margins: -3
-                                                radius: 19
-                                                color: "transparent"
-                                                border.width: 2
-                                                border.color: wpItem.current ? Theme.accent : "transparent"
-                                                antialiasing: Theme.shapesAa
+                                        Behavior on opacity {
+                                            enabled: Theme.animationsEnabled
+                                            NumberAnimation {
+                                                duration: Theme.durFastEffects
+                                                easing.type: Easing.BezierSpline
+                                                easing.bezierCurve: Theme.curveFastEffects
                                             }
                                         }
 
                                         Text {
-                                            width: parent.width - 24
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            horizontalAlignment: Text.AlignHCenter
+                                            id: pillText
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            verticalAlignment: Text.AlignVCenter
                                             elide: Text.ElideRight
+                                            maximumLineCount: 1
                                             text: wpItem.wpName
+                                            color: "#e3e2e9"
                                             font.family: Theme.fontFamily
-                                            font.pixelSize: Theme.fs(12)
-                                            font.weight: wpItem.current ? Font.Medium : Font.Normal
-                                            color: wpItem.current ? Theme.textPrimary : Theme.textMuted
+                                            font.pixelSize: Theme.fs(11)
                                             antialiasing: Theme.textAa
                                             renderType: Theme.textRenderType
                                         }
@@ -1467,6 +1502,10 @@ Scope {
                                     else if (event.angleDelta.y < 0) wallpaperView.incrementCurrentIndex()
                                     event.accepted = true
                                 }
+                            }
+                            EdgeFade {
+                                flick: wallpaperView
+                                fadeSize: 48
                             }
 
                             // Empty state (Caelestia "No wallpapers found").

@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
@@ -14,7 +13,7 @@ import "../../../style/ui"
 // - selecting a pill runs a container-transform morph (Android 17 style):
 //   the pill expands into the large card while the previous large card
 //   minimizes, animating width, corner radius and content reveal together
-// - track change on the active card: M3 fade through (fade + scale 92%)
+// - track change on the active card: content slides left to right
 Item {
     id: root
 
@@ -58,6 +57,10 @@ Item {
     readonly property real peekWidth: 40
     readonly property real cardGap: 6
     readonly property real bigWidth: Math.max(peekWidth, width - Math.max(0, playerCount - 1) * (peekWidth + cardGap))
+    // Parallax overscan per side for the album art (see
+    // CarouselParallaxImage): the art bleeds past the card and pans
+    // against the scroll direction while switching sessions.
+    readonly property int artParallaxPad: 40
 
     readonly property string outputName: {
         try {
@@ -85,7 +88,7 @@ Item {
         onWheel: event => {
             if (event.angleDelta.y === 0) return
             // One switch per notch: momentum scrolling would otherwise race
-            // through every card (same debounce pattern as CalendarPanel).
+            // through every card (one switch per wheel notch).
             if (playerScrollDebounce.running) {
                 event.accepted = true
                 return
@@ -103,6 +106,14 @@ Item {
         interval: 100
     }
 
+    // Session strip: a plain row — the active card is large and flush
+    // with the tiles on the left while the rest shrink to peeks trailing
+    // right. Deliberately NOT a scroll view: the widths are exact-fill
+    // (big + peeks + gaps == width), so there is zero scroll room and a
+    // ListView's range/snap enforcement fights its own clamps and lands
+    // cards off-position. The scroll *effect* (grow/shrink + art panning
+    // against the switch direction) is driven by the width morph itself
+    // via reveal/panNorm below — one layout driver, deterministic.
     RowLayout {
         anchors.fill: parent
         spacing: root.cardGap
@@ -237,10 +248,10 @@ Item {
         readonly property bool hasProgress: cardItem.cardPlayer ? (cardItem.cardPlayer.positionSupported && cardItem.cardPlayer.lengthSupported && trackLength > 0) : false
         readonly property real trackLength: cardItem.cardPlayer ? Math.max(0, cardItem.cardPlayer.length || 0) : 0
 
-        // Track metadata is rendered from a snapshot so the fade-through can
+        // Track metadata is rendered from a snapshot so the slide can
         // still show the old track while the player already reports the new.
-        property real _txFade: 1
-        property real _txScale: 1
+        property real _txX: 0
+        property real _bgFade: 1
         property string _dispTitle: ""
         property string _dispArtist: ""
         property string _dispArt: ""
@@ -260,7 +271,7 @@ Item {
 
         // Playback position: MPRIS pushes updates on (non)linear changes;
         // the 1s poke keeps players that stay silent fresh. The *displayed*
-        // position is extrapolated between pushes so the wave and thumb
+        // position is extrapolated between pushes so the bar and thumb
         // glide instead of stepping once per second.
         property real positionSecs: 0
         property double positionStamp: 0
@@ -325,24 +336,26 @@ Item {
             }
         }
 
-        // M3 fade through for track changes (only the active card animates):
-        // outgoing fades over the first 35% of the run, incoming fades in
-        // scaling from 92% (same split as Ui.Motion's FadeThrough).
+        // Left-to-right slide for track changes (only the active card
+        // animates): foreground content slides out to the right while the
+        // background art fades out, then the snapshot swaps and the new
+        // content slides in from the left while the new art fades in.
         SequentialAnimation {
             id: trackChangeAnim
             ParallelAnimation {
-                NumberAnimation { target: cardItem; property: "_txFade"; to: 0; duration: Theme.durMotionFadeThrough * Theme.motionFadeThroughExit; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
-                NumberAnimation { target: cardItem; property: "_txScale"; to: Theme.motionFadeThroughScale; duration: Theme.durMotionFadeThrough * Theme.motionFadeThroughExit; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
+                NumberAnimation { target: cardItem; property: "_txX"; to: Theme.motionSlideDistance; duration: Theme.durMotionSharedAxis * Theme.motionFadeThroughExit; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
+                NumberAnimation { target: cardItem; property: "_bgFade"; to: 0; duration: Theme.durMotionSharedAxis * Theme.motionFadeThroughExit; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
             }
             ScriptAction { script: cardItem.syncDisplay() }
+            ScriptAction { script: cardItem._txX = -Theme.motionSlideDistance }
             ParallelAnimation {
-                NumberAnimation { target: cardItem; property: "_txFade"; to: 1; duration: Theme.durMotionFadeThrough * Theme.motionFadeThroughEnter; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
-                NumberAnimation { target: cardItem; property: "_txScale"; to: 1; duration: Theme.durMotionFadeThrough * Theme.motionFadeThroughEnter; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
+                NumberAnimation { target: cardItem; property: "_txX"; to: 0; duration: Theme.durMotionSharedAxis * Theme.motionFadeThroughEnter; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
+                NumberAnimation { target: cardItem; property: "_bgFade"; to: 1; duration: Theme.durMotionSharedAxis * Theme.motionFadeThroughEnter; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveMotion }
             }
             ScriptAction { script: artSyncTimer.restart() }
         }
         // Some players publish trackArtUrl slightly after the track change;
-        // pick it up once the fade-through has finished.
+        // pick it up once the slide has finished.
         Timer {
             id: artSyncTimer
             interval: 1500
@@ -403,6 +416,12 @@ Item {
         }
         readonly property bool controlsEnabled: cardItem.active && cardItem.reveal > 0.85
 
+        // Scroll-effect pan, driven by the width morph (not a scroll
+        // position): 0 on the settled active card, ±1 on a settled peek
+        // (sign = side), sweeping through the morph. Pure function of
+        // layout state, so it can never desync or leave a stale offset.
+        readonly property real panNorm: (index < root.activeIndex ? -1 : 1) * (1 - cardItem.reveal)
+
         implicitWidth: cardItem.active ? root.bigWidth : root.peekWidth
         Behavior on implicitWidth {
             enabled: Theme.animationsEnabled
@@ -416,34 +435,33 @@ Item {
             border.width: 1
             border.color: Qt.rgba(1, 1, 1, 0.12)
             antialiasing: Theme.shapesAa
-            opacity: cardItem._txFade
-            transform: Scale {
-                origin.x: width / 2
-                origin.y: height / 2
-                xScale: cardItem._txScale
-                yScale: cardItem._txScale
-            }
 
+            // Foreground content slides left to right on track change;
+            // the background art only fades; the card box and scrim stay
+            // static.
             // Full-bleed album art, decoded at thumbnail size and scaled up
             // (cheap blur) with a scrim for text contrast.
             Rectangle {
                 anchors.fill: parent
                 visible: !artImage.visible
+                opacity: cardItem._bgFade
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: Theme.withAlpha(Theme.primary, 0.55) }
                     GradientStop { position: 1.0; color: Theme.withAlpha(Theme.primary_container, 0.9) }
                 }
             }
-            Image {
+            CarouselParallaxImage {
                 id: artImage
-                anchors.fill: parent
+                height: parent.height
+                fullWidth: root.bigWidth + 2 * root.artParallaxPad
+                parallaxPad: root.artParallaxPad
+                centerNorm: cardItem.panNorm
                 source: cardItem.artUrl
                 sourceSize: Qt.size(64, 64)
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
                 cache: true
                 smooth: Theme.imageSmooth
                 visible: status === Image.Ready
+                opacity: cardItem._bgFade
             }
             Rectangle {
                 anchors.fill: parent
@@ -464,6 +482,7 @@ Item {
                 height: parent.height - 28
                 spacing: 8
                 opacity: cardItem.reveal
+                transform: Translate { x: cardItem._txX }
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -584,15 +603,28 @@ Item {
 
                     Rectangle {
                         id: playButton
-                        Layout.preferredWidth: 70
+                        // Playing (pause glyph showing): wide rounded
+                        // rectangle; paused (play glyph): circle. Width is
+                        // driven through an animatable property so the morph
+                        // glides instead of snapping the title.
+                        property real buttonWidth: cardItem.playing ? 64 : 46
+                        Behavior on buttonWidth {
+                            enabled: Theme.animationsEnabled
+                            NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial }
+                        }
+                        Layout.preferredWidth: Math.round(buttonWidth)
                         Layout.preferredHeight: 46
-                        radius: height / 2
+                        radius: cardItem.playing ? 15 : width / 2
                         color: Theme.primary
                         opacity: cardItem.canToggle && !root.editing ? 1.0 : 0.55
                         scale: playMouse.pressed ? Theme.pressScale : (playMouse.containsMouse ? 1.04 : 1.0)
                         transformOrigin: Item.Center
                         antialiasing: Theme.shapesAa
 
+                        Behavior on radius {
+                            enabled: Theme.animationsEnabled
+                            NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial }
+                        }
                         Behavior on scale {
                             enabled: Theme.animationsEnabled
                             NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial }
@@ -615,7 +647,7 @@ Item {
                         StateLayer {
                             id: playMouse
                             disabled: root.editing || !(cardItem.controlsEnabled && cardItem.canToggle)
-                            radius: Math.round(height / 2)
+                            radius: playButton.radius
                             color: Theme.on_primary
                             onClicked: cardItem.togglePlay()
                         }
@@ -632,14 +664,8 @@ Item {
                         onActivated: cardItem.prev()
                     }
 
-                    // Seek bar: port of Android's SystemUI SquigglyProgress
-                    // (android13-release .../media/SquigglyProgress.kt, dims
-                    // qs_media_seekbar_progress_*). The played portion is a
-                    // traveling sine whose amplitude tapers to zero over 1.5
-                    // wavelengths at the playhead, so the squiggle dissolves
-                    // into the flat inactive line instead of being cut off.
-                    // The wave flattens while paused and freezes while
-                    // scrubbing; a time pill tracks the thumb.
+                    // Seek bar: straight progress line with a thumb; a time
+                    // pill tracks the thumb while scrubbing.
                     Item {
                         id: seekBar
                         Layout.fillWidth: true
@@ -647,137 +673,26 @@ Item {
                         visible: cardItem.hasProgress
 
                         readonly property bool hot: seekMouse.containsMouse || cardItem.seeking
-                        // AOSP QS media defaults, scaled up for the card:
-                        // wavelength 20dp, amplitude 1.5dp, phase 8dp/s,
-                        // stroke 2dp.
-                        readonly property real waveLen: 20
-                        readonly property real waveAmp: 2.5
-                        readonly property real waveStroke: 4
-                        readonly property real phaseSpeed: 8
-                        // Amplitude is up while playing; travel freezes while
-                        // scrubbing (the shape stays put under the thumb).
-                        readonly property bool waveActive: cardItem.active && cardItem.playing
-                        readonly property bool waveTravel: seekBar.waveActive && !cardItem.seeking && Theme.animationsEnabled
+                        readonly property real trackHeight: 4
                         readonly property real progressPx: seekBar.width * cardItem.progressFrac
 
-                        // AOSP amplitude ease: 800ms emphasized-decelerate
-                        // in on play, 550ms standard-decelerate out on pause.
-                        property real waveAmount: 0
-                        onWaveActiveChanged: waveAmount = waveActive ? 1 : 0
-                        Component.onCompleted: waveAmount = waveActive ? 1 : 0
-                        Behavior on waveAmount {
-                            enabled: Theme.animationsEnabled
-                            NumberAnimation {
-                                duration: seekBar.waveActive ? Theme.durLarge : Theme.durDefaultSpatial
-                                easing.type: Easing.BezierSpline
-                                easing.bezierCurve: seekBar.waveActive ? Theme.curveEmphasizedDecelerate : Theme.curveStandardDecel
-                            }
+                        // Full-track line in the inactive tint.
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width
+                            height: seekBar.trackHeight
+                            radius: height / 2
+                            color: Qt.rgba(1, 1, 1, 0.26)
+                            antialiasing: Theme.shapesAa
                         }
-
-                        // Traveling phase: one wavelength per run, looped
-                        // (8px/s => one wavelength per 2.5s).
-                        property real phase: 0
-                        NumberAnimation {
-                            target: seekBar
-                            property: "phase"
-                            from: 0
-                            to: seekBar.waveLen
-                            duration: Math.max(1, Math.round(seekBar.waveLen / seekBar.phaseSpeed * 1000))
-                            loops: Animation.Infinite
-                            running: seekBar.waveTravel
-                        }
-
-                        // AOSP envelope: the squiggle is always at least 20%
-                        // of the bar when idle and follows the true position
-                        // past 60%, so it stays readable at 0%.
-                        readonly property real waveEndFrac: cardItem.progressFrac > 0.6
-                            ? cardItem.progressFrac
-                            : 0.2 + 0.4 * (cardItem.progressFrac / 0.6)
-                        readonly property real taper: seekBar.waveLen * 1.5
-
-                        function r2(v: real): string { return (Math.round(v * 100) / 100).toString() }
-                        function ampAt(x: real, sign: real): real {
-                            const wp = seekBar.width * seekBar.waveEndFrac
-                            const c = Math.max(0, Math.min(1, (wp + seekBar.taper / 2 - x) / seekBar.taper))
-                            return sign * seekBar.waveAmount * seekBar.waveAmp * c
-                        }
-                        // AOSP path construction: moveTo(waveStart), then one
-                        // cubic per half wavelength with horizontal tangents
-                        // at every knot (control points share midX).
-                        function buildWavePath(): string {
-                            if (seekBar.width <= 0) return ""
-                            const cy = seekBar.height / 2
-                            const half = seekBar.waveLen / 2
-                            let x = -seekBar.phase - seekBar.waveLen / 2
-                            let sign = 1
-                            let amp = seekBar.ampAt(x, sign)
-                            let d = "M " + seekBar.r2(x) + " " + seekBar.r2(cy)
-                            while (x < seekBar.width) {
-                                sign = -sign
-                                const nx = x + half
-                                const mx = x + half / 2
-                                const namp = seekBar.ampAt(nx, sign)
-                                d += " C " + seekBar.r2(mx) + " " + seekBar.r2(cy + amp)
-                                    + " " + seekBar.r2(mx) + " " + seekBar.r2(cy + namp)
-                                    + " " + seekBar.r2(nx) + " " + seekBar.r2(cy + namp)
-                                amp = namp
-                                x = nx
-                            }
-                            return d
-                        }
-                        readonly property string wavePath: buildWavePath()
-
-                        // Full-track squiggle in the inactive tint; the active
-                        // copy is clipped at the playhead (AOSP draws the same
-                        // path with two paints and clips).
-                        Item {
-                            anchors.fill: parent
-                            clip: true
-
-                            Shape {
-                                width: seekBar.width
-                                height: seekBar.height
-                                ShapePath {
-                                    fillColor: "transparent"
-                                    strokeColor: Qt.rgba(1, 1, 1, 0.26)
-                                    strokeWidth: seekBar.waveStroke
-                                    capStyle: ShapePath.RoundCap
-                                    PathSvg { path: seekBar.wavePath }
-                                }
-                            }
-
-                            Item {
-                                width: seekBar.progressPx
-                                height: seekBar.height
-                                clip: true
-                                Shape {
-                                    width: seekBar.width
-                                    height: seekBar.height
-                                    ShapePath {
-                                        fillColor: "transparent"
-                                        strokeColor: root.fg
-                                        strokeWidth: seekBar.waveStroke
-                                        capStyle: ShapePath.RoundCap
-                                        PathSvg { path: seekBar.wavePath }
-                                    }
-                                }
-                            }
-
-                            // Round left cap (AOSP drawPoint at x=0): the wave
-                            // starts off-screen, so the clip would otherwise
-                            // cut it square.
-                            Rectangle {
-                                width: seekBar.waveStroke
-                                height: width
-                                radius: width / 2
-                                x: -width / 2
-                                y: seekBar.height / 2
-                                    + Math.cos(Math.abs(-seekBar.phase - seekBar.waveLen / 2) / seekBar.waveLen * Math.PI * 2)
-                                        * seekBar.waveAmp * seekBar.waveAmount
-                                    - height / 2
-                                color: root.fg
-                                antialiasing: Theme.shapesAa
-                            }
+                        // Played portion.
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.max(height, seekBar.progressPx)
+                            height: seekBar.trackHeight
+                            radius: height / 2
+                            color: root.fg
+                            antialiasing: Theme.shapesAa
                         }
 
                         // M3 state halo behind the thumb.

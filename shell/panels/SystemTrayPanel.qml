@@ -7,6 +7,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Services.SystemTray
 import "../../style/themes"
+import "../../backend/services"
 import "../../style/ui"
 
 Scope {
@@ -18,7 +19,6 @@ Scope {
     onShowTrayChanged: {
         if (showTray) { _winVisible = true; trayHideTimer.stop() } else trayHideTimer.restart()
     }
-    readonly property string barPos: Theme.barPosition
     // Attached-bar morph: tuck under the bar edge (see Theme.panelAttachOverlap)
     // instead of floating detached below it.
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
@@ -67,7 +67,11 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "systemtray"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
             Item {
                 anchors.fill: parent
                 focus: true
@@ -93,18 +97,16 @@ Scope {
                 shown: trayScope.showTray
                 morphId: "systemtray"
                 morphActive: Theme.isPrimaryScreen(modelData)
-                barPos: trayScope.barPos
                 fullWidth: 340
                 fullHeight: trayBox.implicitHeight
-                anchorCenter: trayAnchor.isVertical ? trayAnchor.cy : trayAnchor.cx
-                edge: trayScope.barPos === "bottom" ? trayAnchor.panelY + trayBox.implicitHeight : trayScope.barPos === "right" ? trayAnchor.panelX + 340 : trayScope.barPos === "left" ? trayAnchor.panelX : trayAnchor.panelY
-                screenSize: trayAnchor.isVertical ? trayAnchor.screenHeight : trayAnchor.screenWidth
+                anchorCenter: trayAnchor.cx
+                edge: trayAnchor.panelY
+                screenSize: trayAnchor.screenWidth
                 margin: trayAnchor.margin
 
                 BarAnchor {
                     id: trayAnchor
                     moduleId: "systemtray"
-                    barPos: trayScope.barPos
                     panelWidth: 340
                     panelHeight: trayBox.implicitHeight
                     screenWidth: trayPopout.parent.width
@@ -131,10 +133,10 @@ Scope {
                         border.color: Theme.panelBorderColor
                         border.width: 2
                         // Bar-side corners square, free corners rounded (fused joint).
-                        topLeftRadius: trayScope.barPos === "top" || trayScope.barPos === "left" ? 0 : Theme.cornerRadius
-                        topRightRadius: trayScope.barPos === "top" || trayScope.barPos === "right" ? 0 : Theme.cornerRadius
-                        bottomLeftRadius: trayScope.barPos === "bottom" || trayScope.barPos === "left" ? 0 : Theme.cornerRadius
-                        bottomRightRadius: trayScope.barPos === "bottom" || trayScope.barPos === "right" ? 0 : Theme.cornerRadius
+                        topLeftRadius: 0
+                        topRightRadius: 0
+                        bottomLeftRadius: Theme.cornerRadius
+                        bottomRightRadius: Theme.cornerRadius
                         // Unclipped: the card paints nothing outside its
                         // bounds; the inner Flickable clips its own content.
                         clip: false
@@ -143,7 +145,7 @@ Scope {
                             antialiasing: Theme.shapesAa
                             visible: Theme.panelAccentBorder
                             x: 0
-                            y: trayScope.barPos === "bottom" ? trayBox.height - 2 : 0
+                            y: 0
                             width: trayBox.width
                             height: 2
                             color: Theme.panelWindowBg
@@ -174,7 +176,8 @@ Scope {
                         contentHeight: trayCol.implicitHeight
                         contentWidth: trayCol.width
                         clip: true
-                        boundsBehavior: Flickable.StopAtBounds
+                        boundsBehavior: Flickable.DragAndOvershootBounds
+                        boundsMovement: Flickable.FollowBoundsBehavior
                         flickableDirection: Flickable.VerticalFlick
                         ColumnLayout {
                             id: trayCol
@@ -404,6 +407,11 @@ Scope {
                             }
                         }
                     }
+                    EdgeFade {
+                        flick: trayFlick
+                        opacity: trayPopout.contentFade
+                    }
+                    OverscrollSpring { flick: trayFlick }
                 }
             }
         }

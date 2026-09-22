@@ -10,12 +10,12 @@ Usage:
 `defaults` resolves the terminal / browser / file manager selection. State lives
 in ~/.config/quickshell/solstice/backend/config/default_apps.json (written by
 `set-default`); kinds without a stored selection fall back to the historic
-Umbriel spawn commands (kitty / helium / nautilus).
+spawn commands (kitty / helium / nautilus).
 
 `set-default` reads the Exec line of the picked .desktop file, binds
 `spawn:<command>` to the chord the previous command was bound to (falling back
-to Mod+Return / Mod+B / Mod+E) through umbriel-keybinds.py and persists the
-selection. Umbriel reloads its config, so the shortcut changes live.
+to SUPER+Return / SUPER+B / SUPER+E) through hyprland-keybinds.py and persists the
+selection. Hyprland reloads its config, so the shortcut changes live.
 
 `info` reports where the app comes from: `rpm`, `dpkg`, `pacman`, `flatpak`,
 `webapp` (solstice web app), `user` (hand-written desktop file) or `unknown`,
@@ -38,20 +38,21 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import sys
 
 HOME = os.path.expanduser("~")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-KEYBINDS_SCRIPT = os.path.join(SCRIPT_DIR, "umbriel-keybinds.py")
+KEYBINDS_SCRIPT = os.path.join(SCRIPT_DIR, "hyprland-keybinds.py")
 WEBAPP_REMOVE = os.path.join(SCRIPT_DIR, "webapp-remove.sh")
 STATE_FILE = os.path.join(HOME, ".config", "quickshell", "solstice",
                           "backend", "config", "default_apps.json")
 
 KINDS = ("terminal", "browser", "fileManager")
 KIND_DEFAULTS = {
-    "terminal": {"command": "kitty", "chord": "Mod+Return"},
-    "browser": {"command": "helium", "chord": "Mod+B"},
-    "fileManager": {"command": "nautilus", "chord": "Mod+E"},
+    "terminal": {"command": "kitty", "chord": "SUPER + Return"},
+    "browser": {"command": "helium", "chord": "SUPER + B"},
+    "fileManager": {"command": "nautilus", "chord": "SUPER + E"},
 }
 
 FLATPAK_DIRS = (
@@ -89,6 +90,10 @@ def find_desktop_file(app_id):
     if needle.endswith(".desktop"):
         needle = needle[:-8]
     if not needle:
+        return None
+    # STABILITY: never let an id escape the application directories (`../`,
+    # absolute paths, NUL bytes).
+    if "\x00" in needle or "/" in needle or needle in (".", "..") or os.path.isabs(needle):
         return None
     for d in app_dirs():
         direct = os.path.join(d, needle + ".desktop")
@@ -198,6 +203,22 @@ def to_spawn_command(args):
     return " ".join(_shell_quote(a) for a in args)
 
 
+def _norm_action_arg(text):
+    """Normalized spawn action argument (see hyprland-keybinds.action_string).
+
+    Args with whitespace/quotes are quoted so collect()'s normalized action
+    and serialize_action()'s shlex.split round-trip the same argv.
+    """
+    s = str(text)
+    if s == "" or '"' in s or any(c.isspace() for c in s):
+        return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return s
+
+
+def to_action(args):
+    return "spawn:" + " ".join(_norm_action_arg(a) for a in args)
+
+
 # ---- keybinds bridge -----------------------------------------------------
 
 _KEYBINDS = None
@@ -206,7 +227,7 @@ _KEYBINDS = None
 def keybinds():
     global _KEYBINDS
     if _KEYBINDS is None:
-        spec = importlib.util.spec_from_file_location("umbriel_keybinds", KEYBINDS_SCRIPT)
+        spec = importlib.util.spec_from_file_location("hyprland_keybinds", KEYBINDS_SCRIPT)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         _KEYBINDS = mod
@@ -233,11 +254,21 @@ def load_state():
 
 def save_state(state):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    tmp = STATE_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(state, fh, indent=4, sort_keys=True)
-        fh.write("\n")
-    os.replace(tmp, STATE_FILE)
+    # STABILITY: unique temp file — a fixed `.tmp` name collides across
+    # concurrent CLI/UI writes.
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(STATE_FILE) + ".",
+                               dir=os.path.dirname(STATE_FILE))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(state, fh, indent=4, sort_keys=True)
+            fh.write("\n")
+        os.replace(tmp, STATE_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def resolve_defaults():
@@ -283,7 +314,10 @@ def set_default(kind, app_id, name=None):
     resolved = resolve_defaults()
     old = resolved[kind]
     chord = old["chord"] or KIND_DEFAULTS[kind]["chord"]
-    new_action = "spawn:" + command
+    # The normalized action joins the argv with spaces (the same shape
+    # hyprland-keybinds.py reports), quoting args with spaces so the bind round
+    # trips; the display command keeps shell quoting.
+    new_action = to_action(args)
     message = ""
     if new_action != old["action"]:
         try:
@@ -312,7 +346,24 @@ def set_default(kind, app_id, name=None):
         "chord": chord,
     }
     save_state(state)
-    return {"ok": True, "defaults": resolve_defaults(), "message": message}
+    # PERF: reuse the resolved rows from above instead of re-collecting the
+    # whole keybind chain (`collect()` re-parses every include).
+    out = dict(resolved)
+    entry = dict(out.get(kind) or {})
+    entry.update({
+        "kind": kind,
+        "id": str(app_id),
+        "name": display,
+        "command": command,
+        "action": new_action,
+        "chord": chord,
+    })
+    # set_bind() above only ran when the action changed; an unchanged default
+    # keeps its previously resolved bound state.
+    if new_action != old["action"]:
+        entry["bound"] = True
+    out[kind] = entry
+    return {"ok": True, "defaults": out, "message": message}
 
 
 # ---- package provenance --------------------------------------------------

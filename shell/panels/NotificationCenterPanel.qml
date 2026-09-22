@@ -9,19 +9,16 @@ import Quickshell.Wayland
 import "../../style/themes"
 import "../../backend/services"
 import "../../style/ui"
-import "./CalendarModel.js" as Cal
 
 Scope {
     id: root
-    property bool showCalendar: false
+    property bool showNotifications: false
     signal dismissed()
     property var notifServer: null
-    property bool _winVisible: showCalendar
-    Timer { id: calHideTimer; interval: Theme.panelHideDelay; repeat: false; onTriggered: if (!root.showCalendar) root._winVisible = false }
-    // PERF: shared debounce for wheel + arrow-key month navigation.
-    Timer { id: _monthNavDebounce; interval: 100; repeat: false }
-    onShowCalendarChanged: {
-        if (showCalendar) { _winVisible = true; calHideTimer.stop() } else calHideTimer.restart()
+    property bool _winVisible: showNotifications
+    Timer { id: hideTimer; interval: Theme.panelHideDelay; repeat: false; onTriggered: if (!root.showNotifications) root._winVisible = false }
+    onShowNotificationsChanged: {
+        if (showNotifications) { _winVisible = true; hideTimer.stop() } else hideTimer.restart()
     }
 
     // --- M3 icon button: circular state-layer target for toolbars and
@@ -217,294 +214,6 @@ Scope {
                 color: shapeToggle.checked ? Theme.on_primary : Theme.textPrimary
                 onClicked: shapeToggle.toggled(!shapeToggle.checked)
             }
-        }
-    }
-
-    // --- Month navigation header: M3 expressive (title-large month label,
-    // filled Today button + circular icon buttons at the trailing edge).
-    component CalHeader: RowLayout {
-        id: calHeaderRoot
-        required property var scope
-        property bool showNav: true
-
-        Layout.fillWidth: true
-        Layout.preferredHeight: 44
-        spacing: 4
-
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 44
-
-            Text {
-                id: monthLabel
-                anchors.left: parent.left
-                anchors.leftMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                text: calHeaderRoot.scope.viewDate.toLocaleDateString(I18n.formatLocale, "MMMM yyyy")
-                color: monthTitleMouse.containsMouse && !calHeaderRoot.scope.viewingCurrentMonth ? Theme.primary : Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fs(20)
-                font.weight: Font.DemiBold
-                antialiasing: Theme.textAa
-                renderType: Theme.textRenderType
-                Behavior on color {
-                    enabled: Theme.animationsEnabled
-                    ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
-                }
-            }
-            StateLayer {
-                id: monthTitleMouse
-                disabled: calHeaderRoot.scope.viewingCurrentMonth
-                showHoverBackground: false
-                radius: 12
-                color: Theme.textPrimary
-                onClicked: calHeaderRoot.scope.goToToday()
-            }
-        }
-        // Today — only when drifted away from the current month.
-        M3Button {
-            visible: calHeaderRoot.showNav && !calHeaderRoot.scope.viewingCurrentMonth
-            label: "Today"
-            glyph: "󰃭"
-            onClicked: calHeaderRoot.scope.goToToday()
-        }
-        M3IconButton {
-            visible: calHeaderRoot.showNav
-            glyph: "‹"
-            glyphSize: 22
-            onClicked: calHeaderRoot.scope.moveMonth(-1)
-        }
-        M3IconButton {
-            visible: calHeaderRoot.showNav
-            glyph: "›"
-            glyphSize: 22
-            onClicked: calHeaderRoot.scope.moveMonth(1)
-        }
-    }
-
-    // --- Selected-day hero: M3 headline date on a primary-container card.
-    component CalHero: Rectangle {
-        id: heroRoot
-        required property var scope
-        Layout.fillWidth: true
-        Layout.preferredHeight: 84
-        radius: 24
-        color: Theme.primary_container
-        antialiasing: Theme.shapesAa
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 18
-            anchors.rightMargin: 16
-            spacing: 14
-            Text {
-                id: heroDayNum
-                Layout.alignment: Qt.AlignVCenter
-                text: heroRoot.scope.selectedDate.getDate()
-                color: Theme.on_primary_container
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fs(40)
-                font.weight: Font.Bold
-                antialiasing: Theme.textAa
-                renderType: Theme.textRenderType
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 0
-                Text {
-                    Layout.fillWidth: true
-                    text: heroRoot.scope.selectedDate.toLocaleDateString(I18n.formatLocale, "dddd")
-                    color: Theme.on_primary_container
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fs(15)
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                    antialiasing: Theme.textAa
-                    renderType: Theme.textRenderType
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: heroRoot.scope.selectedDate.toLocaleDateString(I18n.formatLocale, "MMMM yyyy")
-                    color: Theme.withAlpha(Theme.on_primary_container, 0.72)
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fs(12)
-                    elide: Text.ElideRight
-                    antialiasing: Theme.textAa
-                    renderType: Theme.textRenderType
-                }
-            }
-        }
-        // Click = back to today (same contract as before, just a state layer
-        // instead of a hand-rolled hover tint).
-        StateLayer {
-            radius: 24
-            color: Theme.on_primary_container
-            disabled: heroRoot.scope.selectedKey === heroRoot.scope.todayKey && heroRoot.scope.viewingCurrentMonth
-            onClicked: heroRoot.scope.goToToday()
-        }
-    }
-
-    // --- Month grid: circular M3 day cells (today filled primary, selected
-    // primary container), weekday header, shared-axis month change.
-    component CalGrid: ColumnLayout {
-        id: calGridRoot
-        required property var scope
-
-        Layout.fillWidth: true
-        spacing: 4
-        // Month changes are lateral navigation: the new grid slides 30dp in
-        // from the direction of travel and fades in (M3 shared axis X).
-        Motion {
-            id: monthMotion
-            active: true
-            pattern: Motion.SharedAxisX
-            direction: calGridRoot.scope._monthDir
-        }
-        opacity: monthMotion.opacity
-        // Translate (not x) so the layout keeps owning the position.
-        transform: Translate { x: monthMotion.x }
-        Connections {
-            target: calGridRoot.scope
-            function onMonthRevChanged() { monthMotion.replay() }
-        }
-
-        Row {
-            id: headerRow
-            Layout.alignment: Qt.AlignHCenter
-            spacing: calGridRoot.scope.cellSpacing
-            Repeater {
-                model: calGridRoot.scope.weekdays
-                delegate: Text {
-                    required property var modelData
-                    width: calGridRoot.scope.cellWidth; height: 22
-                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                    text: calGridRoot.scope.weekdayLabel(modelData)
-                    color: Theme.textMuted
-                    font.family: Theme.fontFamily; font.pixelSize: Theme.fs(11); font.weight: Font.Medium; font.letterSpacing: 0.5
-                    antialiasing: Theme.textAa
-                    renderType: Theme.textRenderType
-                }
-            }
-        }
-
-        Repeater {
-            model: calGridRoot.scope.weeks
-            delegate: Row {
-                required property var modelData
-                Layout.alignment: Qt.AlignHCenter
-                spacing: calGridRoot.scope.cellSpacing
-                Repeater {
-                    model: modelData.days
-                    delegate: Item {
-                        id: dayCell
-                        required property var modelData
-                        readonly property bool isToday: modelData.key === calGridRoot.scope.todayKey
-                        readonly property bool isSelected: modelData.key === calGridRoot.scope.selectedKey
-                        readonly property bool filled: dayCell.isToday || dayCell.isSelected
-                        width: calGridRoot.scope.cellWidth
-                        height: calGridRoot.scope.cellHeight
-
-                        Rectangle {
-                            id: dayCircle
-                            anchors.centerIn: parent
-                            width: parent.height
-                            height: parent.height
-                            radius: width / 2
-                            antialiasing: Theme.shapesAa
-                            color: dayCell.isToday ? Theme.primary
-                                : dayCell.isSelected ? Theme.primary_container
-                                : "transparent"
-                            scale: dayLayer.pressed ? Theme.pressScale : 1
-                            Behavior on color {
-                                enabled: Theme.animationsEnabled
-                                ColorAnimation { duration: Theme.durSlowEffects; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveSlowEffects }
-                            }
-                            Behavior on scale {
-                                enabled: Theme.animationsEnabled
-                                NumberAnimation { duration: Theme.durFastSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveFastSpatial }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                text: String(dayCell.modelData.day)
-                                color: {
-                                    if (dayCell.isToday) return Theme.on_primary
-                                    if (dayCell.isSelected) return Theme.on_primary_container
-                                    if (!dayCell.modelData.inMonth) return Theme.withAlpha(Theme.textPrimary, 0.38)
-                                    if (dayCell.modelData.weekend) return Theme.textSecondary
-                                    return Theme.textPrimary
-                                }
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fs(14)
-                                font.weight: dayCell.filled ? Font.DemiBold : Font.Medium
-                                antialiasing: Theme.textAa
-                                renderType: Theme.textRenderType
-                            }
-                            StateLayer {
-                                id: dayLayer
-                                radius: Math.round(dayCircle.width / 2)
-                                color: dayCell.isToday ? Theme.on_primary : dayCell.isSelected ? Theme.on_primary_container : Theme.textPrimary
-                                onClicked: calGridRoot.scope.selectDay(dayCell.modelData)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // --- Footer: M3 linear year progress with an expressive stop dot.
-    component CalFooter: RowLayout {
-        id: calFooterRoot
-        required property var scope
-
-        Layout.fillWidth: true
-        Layout.preferredHeight: 24
-        spacing: 10
-
-        Text {
-            Layout.alignment: Qt.AlignVCenter
-            text: String(calFooterRoot.scope.today.getFullYear())
-            color: Theme.textSecondary
-            font.family: Theme.fontFamily; font.pixelSize: Theme.fs(11); font.weight: Font.Medium
-            antialiasing: Theme.textAa
-            renderType: Theme.textRenderType
-        }
-        Rectangle {
-            id: yearTrack
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignVCenter
-            Layout.preferredHeight: 6
-            height: 6
-            radius: height / 2
-            color: Theme.surface_container_highest
-            antialiasing: Theme.shapesAa
-            Rectangle {
-                antialiasing: Theme.shapesAa
-                width: Math.round(parent.width * calFooterRoot.scope.yearDone)
-                height: parent.height
-                radius: parent.radius
-                color: Theme.primary
-                Behavior on width {
-                    enabled: Theme.animationsEnabled
-                    NumberAnimation { duration: Theme.durDefaultSpatial; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.curveDefaultSpatial }
-                }
-            }
-            Rectangle {
-                antialiasing: Theme.shapesAa
-                width: 4; height: 4; radius: 2
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                color: Theme.textMuted
-            }
-        }
-        Text {
-            Layout.alignment: Qt.AlignVCenter
-            text: calFooterRoot.scope.yearDonePercent + "%"
-            color: Theme.textPrimary
-            font.family: Theme.fontFamily; font.pixelSize: Theme.fs(11); font.weight: Font.Medium
-            antialiasing: Theme.textAa
-            renderType: Theme.textRenderType
         }
     }
 
@@ -796,7 +505,8 @@ Scope {
                     contentWidth: width
                     contentHeight: notifListCol.implicitHeight
                     clip: true
-                    boundsBehavior: Flickable.StopAtBounds
+                    boundsBehavior: Flickable.DragAndOvershootBounds
+                    boundsMovement: Flickable.FollowBoundsBehavior
                     Column {
                     id: notifListCol
                     width: notifFlick.width
@@ -973,61 +683,17 @@ Scope {
                     }
                     }
                 }
+                EdgeFade { flick: notifFlick; fadeColor: Theme.panelCard }
                 ScrollIndicator { flick: notifFlick }
+                OverscrollSpring { flick: notifFlick }
             }
         }
     }
 
     readonly property int barT: Theme.barThickness
-    readonly property string barPos: Theme.barPosition
     // Attached-bar morph: tuck under the bar edge (see Theme.panelAttachOverlap)
     // instead of floating detached below it.
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
-
-    FileView {
-        id: calendarSettingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/solstice/backend/config/calendar.json"
-        watchChanges: true
-        onFileChanged: reload()
-        blockLoading: true
-        printErrors: false
-        adapter: JsonAdapter {
-            property string weekStartDay: "sunday"
-            // Read by Theme.calendarNotifLeft — declared here only so
-            // week-start writes never drop it from the file.
-            property string notifSide: "left"
-        }
-    }
-    Process { id: calendarSettingsInitProc; command: ["bash", "-c", "echo"] }
-    Timer {
-        id: calendarSettingsInitTimer
-        interval: 700
-        running: true
-        repeat: false
-        onTriggered: {
-            if (!calendarSettingsInitProc.running) {
-                calendarSettingsInitProc.command = ["bash", "-c", "mkdir -p ~/.config/quickshell/solstice; if [ ! -f ~/.config/quickshell/solstice/backend/config/calendar.json ]; then echo '{\"weekStartDay\":\"sunday\"}' > ~/.config/quickshell/solstice/backend/config/calendar.json; fi; echo done"]
-                calendarSettingsInitProc.running = true
-            }
-        }
-    }
-
-    property date today: new Date()
-    readonly property string todayKey: Cal.keyForDate(today)
-    property date selectedDate: new Date()
-    readonly property string selectedKey: Cal.keyForDate(selectedDate)
-    property int viewYear: today.getFullYear()
-    property int viewMonth: today.getMonth()
-    readonly property date viewDate: new Date(viewYear, viewMonth, 1)
-    readonly property bool viewingCurrentMonth: viewYear === today.getFullYear() && viewMonth === today.getMonth()
-
-    readonly property real yearDone: Cal.yearProgress(today.getFullYear(), today.getMonth(), today.getDate())
-    readonly property int yearDonePercent: Cal.yearProgressPercent(today.getFullYear(), today.getMonth(), today.getDate())
-
-    readonly property int weekStart: Cal.normalizedWeekStart(calendarSettingsFile.adapter.weekStartDay, 0)
-    readonly property var labelLocale: I18n.formatLocale
-    readonly property var weekdays: Cal.weekdayOrder(weekStart)
-    readonly property var weeks: Cal.monthGrid(viewYear, viewMonth, weekStart, todayKey)
 
     // Notification center model: newest first.
     // CRASH FIX: rebuild plain snapshots here. History may still hold
@@ -1106,75 +772,28 @@ Scope {
         } catch (e) { }
     }
 
-    // M3 Expressive geometry: 44dp day cells carry 36dp circular targets,
-    // each pane is a 24dp-rounded surface card on the panel surface.
-    readonly property int cellWidth: 54
-    readonly property int cellHeight: 36
-    readonly property int cellSpacing: 4
-    readonly property int minimalGridWidth: 7 * cellWidth + 6 * cellSpacing
-    readonly property int calPanePadding: 12
-    readonly property int calPaneWidth: minimalGridWidth + calPanePadding * 2
-    readonly property int notifPaneWidth: 330
-    readonly property int paneGap: 16
+    // M3 Expressive geometry: the notification pane is a 24dp-rounded
+    // surface card on the panel surface.
+    readonly property int notifPaneWidth: 360
+    readonly property int notifPaneHeight: 440
     readonly property int contentMargin: 16
-    readonly property int panelWidth: contentMargin * 2 + notifPaneWidth + paneGap + calPaneWidth
+    readonly property int panelWidth: contentMargin * 2 + notifPaneWidth
 
-    SystemClock {
-        id: sysClock
-        precision: SystemClock.Minutes
-        onDateChanged: {
-            if (Cal.keyForDate(date) === root.todayKey) return
-            var followToday = root.viewingCurrentMonth
-            root.today = date
-            if (followToday) goToToday()
-        }
+    IpcHandler {
+        target: "notificationcenter"
+        function toggle(): void { }
+        function open(): void { }
+        function close(): void { }
+        function state(): string { return "notificationcenter=" + root.showNotifications }
     }
-
+    // Compat alias: the panel used to be called "calendar".
     IpcHandler {
         target: "calendar"
         function toggle(): void { }
         function open(): void { }
         function close(): void { }
-        function nextMonth(): void { root.moveMonth(1) }
-        function prevMonth(): void { root.moveMonth(-1) }
-        function state(): string { return "calendar=" + root.showCalendar + " view=" + root.viewYear + "-" + (root.viewMonth+1) }
+        function state(): string { return "notificationcenter=" + root.showNotifications }
     }
-
-    function goToToday() {
-        viewYear = today.getFullYear(); viewMonth = today.getMonth()
-        selectedDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    }
-    function selectDay(cell) {
-        try {
-            selectedDate = new Date(cell.year, cell.month, cell.day)
-            if (cell.year !== viewYear || cell.month !== viewMonth) {
-                _monthDir = (cell.year > viewYear || (cell.year === viewYear && cell.month > viewMonth)) ? 1 : -1
-                viewYear = cell.year; viewMonth = cell.month
-            }
-        } catch (e) { }
-    }
-    property int _monthDir: 0
-    // Bumped whenever the displayed month/year changes so the grid can replay
-    // its shared-axis enter (once per change, not once per changed property).
-    // Public name so the Connections handler resolves (on_monthRevChanged
-    // never matched).
-    property int monthRev: 0
-    onViewMonthChanged: monthRev++
-    onViewYearChanged: monthRev++
-    function moveMonth(delta) {
-        _monthDir = delta
-        var nxt = Cal.stepMonth(viewYear, viewMonth, delta)
-        viewYear = nxt.year; viewMonth = nxt.month
-    }
-    function moveYear(delta) { moveMonth(delta * 12) }
-    function persistWeekStart(day) {
-        var next = Cal.normalizedWeekStart(day, root.weekStart)
-        if (next === root.weekStart) return
-        calendarSettingsFile.adapter.weekStartDay = Cal.weekStartSettingName(next)
-        calendarSettingsFile.writeAdapter()
-    }
-    function toggleWeekStart() { persistWeekStart(Cal.toggledWeekStart(root.weekStart)) }
-    function weekdayLabel(weekday) { return String(labelLocale.dayName(weekday, Locale.ShortFormat)).toUpperCase() }
 
     function timeAgo(t) {
         try {
@@ -1240,38 +859,41 @@ Scope {
             exclusiveZone: 0
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.namespace: "calendar"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            WlrLayershell.namespace: "notificationcenter"
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
             // Disabled while the panel is closing: during a morph handoff
             // the outgoing window stays mapped for panelHideDelay and must
             // not eat the click that belongs to the panel now on top.
-            MouseArea { anchors.fill: parent; enabled: root.showCalendar; onClicked: root.dismissed() }
+            MouseArea { anchors.fill: parent; enabled: root.showNotifications; onClicked: root.dismissed() }
 
             // Caelestia popout (style/ui/CaelestiaPopout): curtain reveal from
             // behind the bar edge + slide + nested fades off one offsetScale
             // driver (1:1 with caelestia-dots/shell).
             CaelestiaPopout {
-                id: calPopout
-                shown: root.showCalendar
+                id: centerPopout
+                shown: root.showNotifications
                 morphId: "clock"
                 morphActive: Theme.isPrimaryScreen(modelData)
-                barPos: root.barPos
-                // Open geometry: the loaded calendar card spans panelWidth
+                // Open geometry: the loaded notification card spans panelWidth
                 // and reports its natural height through the loader's
                 // implicit size (reading the loader's own size would loop,
                 // since the loader is now sized by the popout).
                 fullWidth: root.panelWidth
-                fullHeight: calLoader.implicitHeight
-                anchorCenter: calAnchor.isVertical ? calAnchor.cy : calAnchor.cx
-                edge: root.barPos === "bottom" ? calAnchor.panelY + calPopout.fullHeight : root.barPos === "right" ? calAnchor.panelX + calPopout.fullWidth : root.barPos === "left" ? calAnchor.panelX : calAnchor.panelY
-                screenSize: calAnchor.isVertical ? calAnchor.screenHeight : calAnchor.screenWidth
-                margin: calAnchor.margin
+                fullHeight: contentLoader.implicitHeight
+                anchorCenter: centerAnchor.cx
+                edge: centerAnchor.panelY
+                screenSize: centerAnchor.screenWidth
+                margin: centerAnchor.margin
 
                 // Frame: stretched by the popout (near edge pinned at the
                 // bar) exactly like every other panel, with the clamped
                 // radius while short.
                 Rectangle {
-                    id: calCard
+                    id: centerCard
                     width: parent.width
                     height: parent.height
                     antialiasing: Theme.shapesAa
@@ -1283,47 +905,46 @@ Scope {
                     border.color: Theme.panelBorderColor
                     border.width: 2
                     // Bar-side corners square, free corners rounded (fused joint).
-                    topLeftRadius: root.barPos === "top" || root.barPos === "left" ? 0 : calPopout.frameRadius
-                    topRightRadius: root.barPos === "top" || root.barPos === "right" ? 0 : calPopout.frameRadius
-                    bottomLeftRadius: root.barPos === "bottom" || root.barPos === "left" ? 0 : calPopout.frameRadius
-                    bottomRightRadius: root.barPos === "bottom" || root.barPos === "right" ? 0 : calPopout.frameRadius
+                    topLeftRadius: 0
+                    topRightRadius: 0
+                    bottomLeftRadius: centerPopout.frameRadius
+                    bottomRightRadius: centerPopout.frameRadius
                     clip: false
                     // Seam strip: erases the collar outline along the fused edge.
                     Rectangle {
                         antialiasing: Theme.shapesAa
                         visible: Theme.panelAccentBorder
                         x: 0
-                        y: root.barPos === "bottom" ? calCard.height - 2 : 0
-                        width: calCard.width
+                        y: 0
+                        width: centerCard.width
                         height: 2
                         color: Theme.panelWindowBg
                     }
 
                     Loader {
-                        id: calLoader
+                        id: contentLoader
                         // Content travels on the popout's own driver (frame
                         // stretches first, content settles after) and keeps
                         // the full panel size so nothing reflows mid-stretch.
                         // contentFade hides it while the card morphs over to
                         // another panel's pose.
-                        opacity: calPopout.contentFade
-                        x: calPopout.contentX
-                        y: calPopout.contentY
-                        width: calPopout.fullWidth
-                        height: calPopout.fullHeight
+                        opacity: centerPopout.contentFade
+                        x: centerPopout.contentX
+                        y: centerPopout.contentY
+                        width: centerPopout.fullWidth
+                        height: centerPopout.fullHeight
                         BarAnchor {
-                            id: calAnchor
+                            id: centerAnchor
                             moduleId: "clock"
-                            barPos: root.barPos
-                            panelWidth: calPopout.fullWidth
-                            panelHeight: calPopout.fullHeight
+                                        panelWidth: centerPopout.fullWidth
+                            panelHeight: centerPopout.fullHeight
                             // Screen dims come from the popout's parent (the
                             // full-screen layer item).
-                            screenWidth: calPopout.parent.width
-                            screenHeight: calPopout.parent.height
+                            screenWidth: centerPopout.parent.width
+                            screenHeight: centerPopout.parent.height
                             gap: root.panelGap
-                            fallbackX: (calPopout.parent.width - calPopout.fullWidth) / 2
-                            fallbackY: calPopout.parent.height - calPopout.fullHeight - root.panelGap
+                            fallbackX: (centerPopout.parent.width - centerPopout.fullWidth) / 2
+                            fallbackY: centerPopout.parent.height - centerPopout.fullHeight - root.panelGap
                         }
                     sourceComponent: Item {
                         id: popupRoot
@@ -1339,36 +960,24 @@ Scope {
 
                         Keys.onPressed: event => {
                             if (event.key === Qt.Key_Escape) { root.dismissed(); event.accepted = true }
-                            else if (!event.isAutoRepeat && (event.key === Qt.Key_Left || event.key === Qt.Key_Right || event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                                if (root._monthNavDebounce.running) { event.accepted = true; return }
-                                root._monthNavDebounce.start()
-                                if (event.key === Qt.Key_Left) root.moveMonth(-1)
-                                else if (event.key === Qt.Key_Right) root.moveMonth(1)
-                                else if (event.key === Qt.Key_Up) root.moveYear(-1)
-                                else root.moveYear(1)
-                                event.accepted = true
-                            }
-                            else if (event.key === Qt.Key_Home || event.text === "t" || event.text === "T") { root.goToToday(); event.accepted = true }
-                            else if (event.text === "w" || event.text === "W") { root.toggleWeekStart(); event.accepted = true }
                         }
                         Component.onCompleted: forceActiveFocus()
                         Connections {
                             target: root
-                            function onShowCalendarChanged() {
-                                if (root.showCalendar) {
-                                    root.today = new Date(); root.goToToday()
+                            function onShowNotificationsChanged() {
+                                if (root.showNotifications) {
                                     Qt.callLater(function() { popupRoot.forceActiveFocus() })
                                 }
                             }
                         }
 
-                        // Frame visuals live in calCard (the popout frame);
+                        // Frame visuals live in centerCard (the popout frame);
                         // this item only carries the layout height.
                         Item {
                             antialiasing: Theme.shapesAa
                             id: outerRect
                             anchors.fill: parent
-                            implicitHeight: contentRow.implicitHeight + root.contentMargin * 2
+                            implicitHeight: centerPane.height + root.contentMargin * 2
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -1376,63 +985,21 @@ Scope {
                             acceptedButtons: Qt.AllButtons
                             // Off while closing: the window outlives the card
                             // (morph/close hold) and must not steal input.
-                            enabled: root.showCalendar
+                            enabled: root.showNotifications
                             onClicked: mouse => mouse.accepted = true
                             onPressed: mouse => mouse.accepted = true
                             onWheel: wheel => wheel.accepted = true
                         }
 
-                        RowLayout {
-                            id: contentRow
-                            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                        // Notification pane — M3 surface card.
+                        NotifCenter {
+                            id: centerPane
+                            scope: root
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
                             anchors.margins: root.contentMargin
-                            spacing: root.paneGap
-                            // Pane swap: RTL mirrors child order. Both panes pin
-                            // LTR back so only the order flips, never the text.
-                            layoutDirection: Theme.calendarNotifLeft ? Qt.LeftToRight : Qt.RightToLeft
-
-                            // Notification pane — M3 surface card (the gap
-                            // replaces the old divider + spacers).
-                            NotifCenter {
-                                scope: root
-                                Layout.preferredWidth: root.notifPaneWidth
-                                Layout.fillHeight: true
-                            }
-
-                            // Calendar pane — M3 surface card.
-                            Rectangle {
-                                id: calPane
-                                antialiasing: Theme.shapesAa
-                                Layout.preferredWidth: root.calPaneWidth
-                                Layout.preferredHeight: calCol.implicitHeight + root.calPanePadding * 2
-                                implicitHeight: calCol.implicitHeight + root.calPanePadding * 2
-                                radius: 24
-                                color: Theme.panelCard
-
-                                ColumnLayout {
-                                    id: calCol
-                                    anchors.fill: parent
-                                    anchors.margins: root.calPanePadding
-                                    layoutDirection: Qt.LeftToRight
-                                    spacing: 8
-                                    CalHeader { scope: root; showNav: true }
-                                    CalHero { scope: root }
-                                    CalGrid { scope: root }
-                                    CalFooter { scope: root }
-                                    WheelHandler {
-                                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                                        // PERF: fast scroll/key-repeat rebuilt the 42-cell
-                                        // grid per tick. Debounce to one nav per 100ms.
-                                        onWheel: event => {
-                                            if (event.angleDelta.y === 0) return
-                                            if (root._monthNavDebounce.running) { event.accepted = true; return }
-                                            root._monthNavDebounce.start()
-                                            root.moveMonth(event.angleDelta.y > 0 ? -1 : 1)
-                                            event.accepted = true
-                                        }
-                                    }
-                                }
-                            }
+                            height: root.notifPaneHeight
                         }
                     }
                 }

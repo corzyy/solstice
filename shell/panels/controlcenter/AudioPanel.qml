@@ -12,8 +12,9 @@ import "../../../style/ui"
 // Audio drill-in of the control center. The volume block's chevron used to
 // expand an accordion inside the CC card; it now opens this first-class
 // panel instead. The panel shares the control-center bar anchor
-// (anchorModuleId), so the cross-panel morph (style/ui/PanelMorph) glides the CC
-// card into this one and back out of it on dismissal.
+// (anchorModuleId), and the container transform (style/ui/PanelMorph +
+// PanelShell) grows the card out of the chevron button, morphing a replica
+// of that same button into the header and back out of it on dismissal.
 Scope {
     id: scope
 
@@ -38,8 +39,6 @@ Scope {
             hideTimer.restart()
         }
     }
-
-    readonly property string barPos: Theme.barPosition
     property int panelGap: -(Theme.barThickness + Theme.panelAttachOverlap)
 
     // ---- PipeWire device model (carried over from the old inline menu) ----
@@ -193,7 +192,11 @@ Scope {
             anchors { top: true; left: true; right: true; bottom: true }
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "audiopanel"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // Hyprland: OnDemand + focus grab (see HyprlandService) so the
+            // taskbar stays clickable while the panel is open.
+            WlrLayershell.keyboardFocus: HyprlandService.isHyprland ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
+            Component.onCompleted: HyprlandService.registerPanelWindow(this)
+            Component.onDestruction: HyprlandService.unregisterPanelWindow(this)
 
             Item {
                 anchors.fill: parent
@@ -223,11 +226,13 @@ Scope {
                 // the handoff only morphs the frame between the two card
                 // heights (horizontal offset/size stay identical).
                 anchorModuleId: "controlcenter"
+                // Container transform: the chevron button replica glides into
+                // the back header while the card grows out of the button.
+                morphTarget: audioHeader
                 // Settles below the CC header/tile row: the CC stays open
                 // and dimmed behind this card (Android-QS drill-in).
                 edgeInset: Theme.panelDrillInInset
                 screenActive: Theme.isPrimaryScreen(modelData)
-                barPos: scope.barPos
                 panelGap: scope.panelGap
                 shown: scope.showAudio
                 boxWidth: 360
@@ -235,6 +240,7 @@ Scope {
 
                 // Header: back into the control center + master state.
                 RowLayout {
+                    id: audioHeader
                     width: parent.width
                     spacing: 6
 

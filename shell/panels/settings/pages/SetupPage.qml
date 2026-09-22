@@ -15,7 +15,8 @@ NexusControls.PageBase {
     title: "Setup"
     showTitle: root.view === ""
     // SettingsPanel's FloatingWindow, forwarded to KeybindsPage for its
-    // shortcuts inhibitor (key capture must not trigger Umbriel's own binds).
+    // shortcuts inhibitor (key capture must not trigger the compositor's own
+    // binds).
     property var hostWindow: null
 
     // Sub-view state: "" (main), "datetime", "language", "keybinds",

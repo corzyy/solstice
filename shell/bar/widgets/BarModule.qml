@@ -5,7 +5,7 @@ import "../../../backend/services"
 
 Item {
     id: root
-    signal requestCalendar()
+    signal requestNotificationCenter()
     signal requestSystemTray()
     signal requestControlCenter()
     signal requestLauncher()
@@ -17,7 +17,7 @@ Item {
     property var monitor: null
     property bool slotHovered: false
     // Workspace-Backend (siehe Workspaces.qml).
-    readonly property var wsBackend: UmbrielService
+    readonly property var wsBackend: HyprlandService
 
     readonly property bool activeVisible: moduleId !== "systemtray" || trayCount > 0
     // PERF: only the systemtray instance scans tray items. Old code ran the
@@ -92,7 +92,7 @@ Item {
         switch (moduleId) {
         case "clock":
             if (right) Theme.toggleClockFormat()
-            else if (left) requestCalendar()
+            else if (left) requestNotificationCenter()
             break
         case "systemtray":
             // Pinned icons handle their own clicks; the grid button
@@ -202,7 +202,7 @@ Item {
             implicitWidth: clockInner.implicitWidth + 12
             implicitHeight: clockInner.implicitHeight + 8
             function toggleLabel(): void { clockInner.toggleLabel() }
-            Clock { id: clockInner; anchors.centerIn: parent; vertical: root.vertical; onClicked: root.requestCalendar() }
+            Clock { id: clockInner; anchors.centerIn: parent; vertical: root.vertical; onClicked: root.requestNotificationCenter() }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
         }
     }

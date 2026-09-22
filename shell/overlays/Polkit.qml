@@ -57,11 +57,11 @@ Scope {
     }
     Timer {
         id: agentWatchdog
-        // STABILITY: bounded retries. If another polkit agent (GNOME/KDE/
-        // hyprpolkitagent, a second shell instance, …) already owns the
-        // session, registration fails permanently with "An authentication
-        // agent already exists for the given subject". Retrying forever only
-        // spams the journal. We back off and stop, and can be re-armed with
+        // STABILITY: bounded retries. If another polkit agent (GNOME/KDE,
+        // a second shell instance, …) already owns the session, registration
+        // fails permanently with "An authentication agent already exists for
+        // the given subject". Retrying forever only spams the journal. We
+        // back off and stop, and can be re-armed with
         // `quickshell ipc -c solstice call polkit retry`.
         property int failures: 0
         readonly property int maxFailures: 5
@@ -152,7 +152,6 @@ Scope {
     }
 
     readonly property int barT: Theme.barThickness
-    readonly property string barPos: Theme.barPosition
 
     IpcHandler {
         target: "polkit"
@@ -232,7 +231,7 @@ Scope {
             Item {
                 id: dialogWrapper
                 anchors.centerIn: parent
-                anchors.verticalCenterOffset: polkitScope.barPos === "top" ? polkitScope.barT * 0.15 : polkitScope.barPos === "bottom" ? -polkitScope.barT * 0.15 : 0
+                anchors.verticalCenterOffset: polkitScope.barT * 0.15
                 width: 420
                 implicitHeight: dialogBox.implicitHeight
                 // Dialog enter/exit: M3 fade through (fade + settle from 92%).
@@ -401,7 +400,7 @@ Scope {
                             visible: polkitScope.flow && polkitScope.flow.supplementaryMessage && polkitScope.flow.supplementaryMessage.length > 0
                             implicitHeight: suppText.implicitHeight + 10
                             radius: Theme.cornerRadiusSmall
-                            color: polkitScope.flow && polkitScope.flow.supplementaryIsError ? Theme.withAlpha(Theme.error, 0.14) : Theme.withAlpha(Theme.panelSurface, 0.9)
+                            color: polkitScope.flow && polkitScope.flow.supplementaryIsError ? Theme.withAlpha(Theme.error, 0.14) : Theme.panelCardHigh
                             border.color: polkitScope.flow && polkitScope.flow.supplementaryIsError ? Theme.withAlpha(Theme.errorColor, 0.28) : Theme.divider
                             border.width: 1
                             Text {

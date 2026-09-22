@@ -44,9 +44,7 @@ Scope {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.rightMargin: debugScope.cornerMargin
-                    + (Theme.barPosition === "right" ? Theme.barThickness : 0)
                 anchors.bottomMargin: debugScope.cornerMargin
-                    + (Theme.barPosition === "bottom" ? Theme.barThickness : 0)
                 width: content.implicitWidth + 28
                 height: content.implicitHeight + 20
                 radius: Theme.cornerRadiusSmall

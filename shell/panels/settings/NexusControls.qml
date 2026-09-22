@@ -736,7 +736,12 @@ QtObject {
                 contentHeight: menuCol.implicitHeight
                 contentWidth: width
                 clip: true
-                boundsBehavior: Flickable.StopAtBounds
+                // Dropdown options: native drag overshoot springs back at the
+                // ends (no custom wheel handler, so the built-in wheel
+                // overshoot applies too — no OverscrollSpring sibling
+                // possible inside Popup.contentItem).
+                boundsBehavior: Flickable.DragAndOvershootBounds
+                boundsMovement: Flickable.FollowBoundsBehavior
                 flickableDirection: Flickable.VerticalFlick
                 Column {
                     id: menuCol

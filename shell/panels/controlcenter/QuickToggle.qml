@@ -26,6 +26,13 @@ Item {
     implicitHeight: 72
     activeFocusOnTab: true
 
+    // Container-transform replica (PanelShell.morphReplica): while the tile
+    // is morphed toward a page header its height leaves the tile range, and
+    // the icon column scales with it so the replica lands on the header's
+    // geometry (title at ~38px, icon where the back button sits) instead of
+    // keeping tile-sized furniture. Real tiles (72/154 tall) keep k = 1.
+    readonly property real _replicaK: Math.max(0, Math.min(1, height / 72))
+
     function activate(): void {
         if (editing) editToggled()
         else toggled()
@@ -69,12 +76,12 @@ Item {
 
         Rectangle {
             id: iconCircle
-            width: root.compact ? parent.width : 40
-            height: root.compact ? parent.height : 40
+            width: root.compact ? parent.width : 40 * root._replicaK
+            height: root.compact ? parent.height : 40 * root._replicaK
             radius: width / 2
             antialiasing: Theme.shapesAa
             anchors.left: parent.left
-            anchors.leftMargin: root.compact ? 0 : 14
+            anchors.leftMargin: root.compact ? 0 : 14 * root._replicaK
             anchors.verticalCenter: parent.verticalCenter
             color: root.compact ? "transparent" : (root.active ? Theme.withAlpha(root.activeContentColor, 0.16) : Theme.withAlpha(root.inactiveContentColor, 0.08))
 
@@ -87,7 +94,7 @@ Item {
                 anchors.centerIn: parent
                 text: root.glyph
                 font.family: Theme.iconFontFamily
-                font.pixelSize: Theme.fs(20)
+                font.pixelSize: Theme.fs(20) * (root.compact ? 1 : root._replicaK)
                 color: root.active ? root.activeContentColor : root.inactiveContentColor
                 antialiasing: Theme.textAa
                 renderType: Theme.textRenderType
@@ -102,7 +109,7 @@ Item {
         Column {
             visible: !root.compact
             anchors.left: iconCircle.right
-            anchors.leftMargin: 12
+            anchors.leftMargin: 12 * root._replicaK
             anchors.right: parent.right
             anchors.rightMargin: root.editing ? 32 : 12
             anchors.verticalCenter: parent.verticalCenter

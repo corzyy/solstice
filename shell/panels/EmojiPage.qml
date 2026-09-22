@@ -38,6 +38,7 @@ Item {
     // shared slide (pageVisible/pageX), so the page needs no transition of
     // its own.
     visible: root.scope.pageVisible(root.scope.pageEmoji)
+    opacity: root.scope.pageOpacity(root.scope.pageEmoji)
     transform: Translate { x: root.scope.pageX(root.scope.pageEmoji, root.width) }
     enabled: root.scope.emojiMode
 
@@ -125,7 +126,8 @@ Item {
             orientation: ListView.Horizontal
             spacing: 6
             clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            boundsBehavior: Flickable.DragAndOvershootBounds
+            boundsMovement: Flickable.FollowBoundsBehavior
             model: root.categories
             delegate: Rectangle {
                 id: chip
@@ -160,10 +162,22 @@ Item {
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: event => {
-                    const max = Math.max(0, categoryList.contentWidth - categoryList.width)
-                    categoryList.contentX = Math.max(0, Math.min(max, categoryList.contentX - event.angleDelta.y))
+                    // Vertical notches drive the horizontal strip; landing
+                    // on either end kicks the spring (OverscrollSpring).
+                    let dx = event.angleDelta.y
+                    if (dx === 0 && event.pixelDelta) dx = event.pixelDelta.y
+                    if (dx === 0) return
+                    categorySpring.scrollX(dx)
                     event.accepted = true
                 }
+            }
+            OverscrollSpring {
+                id: categorySpring
+                flick: categoryList
+                verticalEnabled: false
+                // No wheel observer: the WheelHandler above already routes
+                // every tick through scrollX().
+                interceptWheel: false
             }
         }
 
@@ -177,7 +191,8 @@ Item {
             id: emojiGrid
             anchors.fill: parent
             clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            boundsBehavior: Flickable.DragAndOvershootBounds
+            boundsMovement: Flickable.FollowBoundsBehavior
             reuseItems: true
             cacheBuffer: 600
             model: root.scope.emojiMode ? root.scope.emojiResults : []
@@ -255,7 +270,9 @@ Item {
                     renderType: Theme.textRenderType
                 }
             }
+            EdgeFade { flick: emojiGrid }
             ScrollIndicator { flick: emojiGrid }
+            OverscrollSpring { flick: emojiGrid }
         }
 
         // ---- footer: highlighted emoji + result count ----------------------
